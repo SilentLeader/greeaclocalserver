@@ -498,3 +498,6 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# Exclude dev config
+**/*.dev.json
