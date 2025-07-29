@@ -7,14 +7,9 @@ using GreeACHeartBeatServer.Api.Options;
 
 namespace GreeACHeartBeatServer.Api.Services;
 
-public class CryptoService
+public class CryptoService(IOptions<ServerOptions> options)
 {
-    private readonly string _cryptoKey;
-
-    public CryptoService(IOptions<ServerOptions> options)
-    {
-        _cryptoKey = options.Value.CryptoKey;
-    }
+    private readonly string _cryptoKey = options.Value.CryptoKey;
 
     public string Decrypt(string pack)
     {

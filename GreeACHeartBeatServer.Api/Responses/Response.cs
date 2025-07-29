@@ -12,5 +12,4 @@ public class Response : BaseResponseWithId
     
     [JsonPropertyName("pack")]
     public string Data { get; set; }
-    
 }

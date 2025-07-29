@@ -6,7 +6,5 @@ namespace GreeACHeartBeatServer.Api.Responses
     {
         [JsonPropertyName("t")]
         public string ResponseType { get; set; }
-
-        
     }
 }

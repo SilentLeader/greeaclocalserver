@@ -1,5 +1,3 @@
-using System;
-
 namespace GreeACHeartBeatServer.Api.Responses
 {
     public class GreeHandlerResponse

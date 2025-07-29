@@ -4,14 +4,14 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
+using System.Linq;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 using GreeACHeartBeatServer.Api.Responses;
 using Microsoft.Extensions.Options;
 using GreeACHeartBeatServer.Api.Options;
 using Microsoft.Extensions.Logging;
 using Serilog.Context;
-using System.Linq;
-using System.Collections.Generic;
-using System.Threading.Tasks;
 
 namespace GreeACHeartBeatServer.Api.Services
 {

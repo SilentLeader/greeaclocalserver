@@ -1,5 +1,3 @@
-using System;
-
 namespace GreeACHeartBeatServer.Api.ValueObjects
 {
     public static class CommandType

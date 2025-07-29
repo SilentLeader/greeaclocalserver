@@ -1,16 +1,15 @@
 using System;
+using System.Text.Json;
 using GreeACHeartBeatServer.Api.Request;
 using GreeACHeartBeatServer.Api.Responses;
-using System.Text.Json;
 using GreeACHeartBeatServer.Api.ValueObjects;
-using GreeACHeartBeatServer.Api.Services;
 using Microsoft.Extensions.Options;
 using GreeACHeartBeatServer.Api.Options;
 using Microsoft.Extensions.Logging;
 
 namespace GreeACHeartBeatServer.Api.Services;
 
-public class MessageHandlerService
+public class MessageHandlerService(CryptoService cryptoService, IOptions<ServerOptions> serverOptions, ILogger<MessageHandlerService> logger)
 {
     private static JsonSerializerOptions _jsonSerializerOptions = new JsonSerializerOptions
     {
@@ -18,16 +17,9 @@ public class MessageHandlerService
         WriteIndented = false
     };
 
-    private readonly CryptoService _cryptoService;
-    private readonly ServerOptions _serverOptions;
-    private readonly ILogger<MessageHandlerService> _logger;
-
-    public MessageHandlerService(CryptoService cryptoService, IOptions<ServerOptions> serverOptions, ILogger<MessageHandlerService> logger)
-    {
-        _cryptoService = cryptoService;
-        _serverOptions = serverOptions.Value;
-        _logger = logger;
-    }
+    private readonly CryptoService _cryptoService = cryptoService;
+    private readonly ServerOptions _serverOptions = serverOptions.Value;
+    private readonly ILogger<MessageHandlerService> _logger = logger;
 
     public GreeHandlerResponse GetResponse(string input)
     {

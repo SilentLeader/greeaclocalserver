@@ -1,5 +1,4 @@
-﻿using System;
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Configuration;
 using GreeACHeartBeatServer.Api.Services;
@@ -15,6 +14,7 @@ namespace GreeACHeartBeatServer.Api
             Log.Logger = new LoggerConfiguration()
                 .ReadFrom.Configuration(new ConfigurationBuilder()
                     .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
+                    .AddJsonFile("appsettings.dev.json", optional: true, reloadOnChange: true)
                     .Build())
                 .CreateLogger();
 
