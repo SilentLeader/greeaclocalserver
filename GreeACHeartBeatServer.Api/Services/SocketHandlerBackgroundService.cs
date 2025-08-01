@@ -4,16 +4,19 @@ using Microsoft.Extensions.Hosting;
 
 namespace GreeACHeartBeatServer.Api.Services
 {
-    public class SocketHandlerBackgroundService : BackgroundService
+    public class SocketHandlerBackgroundService(SocketHandlerService socketHandlerService) : BackgroundService
     {
-        private readonly SocketHandlerService _socketHandlerService;
-        public SocketHandlerBackgroundService(SocketHandlerService socketHandlerService)
+        private readonly SocketHandlerService _socketHandlerService = socketHandlerService;
+
+        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            _socketHandlerService = socketHandlerService;
+            await Task.Run(() => _socketHandlerService.Start(), stoppingToken);
         }
-        protected override Task ExecuteAsync(CancellationToken stoppingToken)
+
+        public override async Task StopAsync(CancellationToken cancellationToken)
         {
-            return Task.Run(() => _socketHandlerService.Start(), stoppingToken);
+            _socketHandlerService.Stop();
+            await base.StopAsync(cancellationToken);
         }
     }
 }

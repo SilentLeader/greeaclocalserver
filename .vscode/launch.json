@@ -16,7 +16,7 @@
                 "ASPNETCORE_ENVIRONMENT": "Development"
             },
             "stopAtEntry": false,
-            "console": "internalConsole",
+            "console": "integratedTerminal",
             "preLaunchTask": "build",
             "justMyCode": true,
             "logging": {
