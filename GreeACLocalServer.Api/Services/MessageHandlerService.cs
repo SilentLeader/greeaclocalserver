@@ -1,4 +1,3 @@
-using System;
 using System.Text.Json;
 using GreeACLocalServer.Api.Request;
 using GreeACLocalServer.Api.Responses;
@@ -29,7 +28,7 @@ public class MessageHandlerService(CryptoService cryptoService, IOptions<ServerO
             return HandleUnknownCommand(true);
         }
 
-        DefaultRequest request;
+        DefaultRequest? request;
         try
         {
             request = JsonSerializer.Deserialize<DefaultRequest>(input);
@@ -38,6 +37,12 @@ public class MessageHandlerService(CryptoService cryptoService, IOptions<ServerO
         {
             var inputBytes = System.Text.Encoding.ASCII.GetBytes(input);
             _logger.LogWarning(e, "Invalid message format. Input bytes: {InputBytes}", inputBytes);
+            return HandleUnknownCommand();
+        }
+
+        if (request == null)
+        {
+            _logger.LogWarning("Deserialization returned null");
             return HandleUnknownCommand();
         }
 
@@ -93,7 +98,16 @@ public class MessageHandlerService(CryptoService cryptoService, IOptions<ServerO
 
     private GreeHandlerResponse HandlePack(DefaultRequest req)
     {
-        Pack pack = JsonSerializer.Deserialize<Pack>(_cryptoService.Decrypt(req.Pack));
+        Pack? pack = JsonSerializer.Deserialize<Pack>(_cryptoService.Decrypt(req.Pack));
+        if (pack == null)
+        {
+            _logger.LogWarning("Pack deserialization returned null");
+            return new GreeHandlerResponse
+            {
+                Data = string.Empty,
+                KeepAlive = false
+            };
+        }
         switch (pack.Type)
         {
             case "devLogin":
