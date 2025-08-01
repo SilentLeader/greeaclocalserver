@@ -1,9 +1,13 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+﻿using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Configuration;
 using GreeACHeartBeatServer.Api.Services;
 using GreeACHeartBeatServer.Api.Options;
 using Serilog;
+using Microsoft.Extensions.Hosting.Systemd;
+using Microsoft.Extensions.Hosting.WindowsServices;
 
 namespace GreeACHeartBeatServer.Api
 {
@@ -18,7 +22,7 @@ namespace GreeACHeartBeatServer.Api
                     .Build())
                 .CreateLogger();
 
-            var host = Host.CreateDefaultBuilder(args)
+            var hostBuilder = Host.CreateDefaultBuilder(args)
                 .UseSerilog()
                 .ConfigureAppConfiguration((hostingContext, config) =>
                 {
@@ -31,11 +35,13 @@ namespace GreeACHeartBeatServer.Api
                     services.AddSingleton<MessageHandlerService>();
                     services.AddSingleton<SocketHandlerService>();
                     services.Configure<ServerOptions>(context.Configuration.GetSection("Server"));
+                    services.AddHostedService<SocketHandlerBackgroundService>();
                 })
-                .Build();
+                .UseSystemd()
+                .UseWindowsService();
 
-            var gsh = host.Services.GetRequiredService<SocketHandlerService>();
-            gsh.Start();
+            var host = hostBuilder.Build();
+            host.Run();
         }
     }
 }

@@ -6,9 +6,22 @@
     "configurations": [        
         {
             "name": "GreeACHeartBeatServer.Api Debug",
-            "type": "dotnet",
+            "type": "coreclr",
             "request": "launch",
-            "projectPath": "${workspaceFolder}/GreeACHeartBeatServer.Api/GreeACHeartBeatServer.Api.csproj"
+            "program": "${workspaceFolder}/GreeACHeartBeatServer.Api/bin/Debug/net9.0/GreeACHeartBeatServer.Api.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/GreeACHeartBeatServer.Api",
+            "env": {
+                "DOTNET_ENVIRONMENT": "Development",
+                "ASPNETCORE_ENVIRONMENT": "Development"
+            },
+            "stopAtEntry": false,
+            "console": "internalConsole",
+            "preLaunchTask": "build",
+            "justMyCode": true,
+            "logging": {
+                "moduleLoad": false
+            }
         }
     ]
 }
