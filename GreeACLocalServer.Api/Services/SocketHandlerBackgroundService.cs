@@ -2,7 +2,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 
-namespace GreeACHeartBeatServer.Api.Services
+namespace GreeACLocalServer.Api.Services
 {
     public class SocketHandlerBackgroundService(SocketHandlerService socketHandlerService) : BackgroundService
     {

@@ -3,9 +3,9 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Options;
-using GreeACHeartBeatServer.Api.Options;
+using GreeACLocalServer.Api.Options;
 
-namespace GreeACHeartBeatServer.Api.Services;
+namespace GreeACLocalServer.Api.Services;
 
 public class CryptoService(IOptions<ServerOptions> options)
 {

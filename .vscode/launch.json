@@ -5,12 +5,12 @@
     "version": "0.2.0",
     "configurations": [        
         {
-            "name": "GreeACHeartBeatServer.Api Debug",
+            "name": "GreeACLocalServer.Api Debug",
             "type": "coreclr",
             "request": "launch",
-            "program": "${workspaceFolder}/GreeACHeartBeatServer.Api/bin/Debug/net9.0/GreeACHeartBeatServer.Api.dll",
+            "program": "${workspaceFolder}/GreeACLocalServer.Api/bin/Debug/net9.0/GreeACLocalServer.Api.dll",
             "args": [],
-            "cwd": "${workspaceFolder}/GreeACHeartBeatServer.Api",
+            "cwd": "${workspaceFolder}/GreeACLocalServer.Api",
             "env": {
                 "DOTNET_ENVIRONMENT": "Development",
                 "ASPNETCORE_ENVIRONMENT": "Development"

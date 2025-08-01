@@ -1,13 +1,13 @@
 using System;
 using System.Text.Json;
-using GreeACHeartBeatServer.Api.Request;
-using GreeACHeartBeatServer.Api.Responses;
-using GreeACHeartBeatServer.Api.ValueObjects;
+using GreeACLocalServer.Api.Request;
+using GreeACLocalServer.Api.Responses;
+using GreeACLocalServer.Api.ValueObjects;
 using Microsoft.Extensions.Options;
-using GreeACHeartBeatServer.Api.Options;
+using GreeACLocalServer.Api.Options;
 using Microsoft.Extensions.Logging;
 
-namespace GreeACHeartBeatServer.Api.Services;
+namespace GreeACLocalServer.Api.Services;
 
 public class MessageHandlerService(CryptoService cryptoService, IOptions<ServerOptions> serverOptions, ILogger<MessageHandlerService> logger)
 {

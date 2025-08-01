@@ -1,4 +1,4 @@
-namespace GreeACHeartBeatServer.Api.Request
+namespace GreeACLocalServer.Api.Request
 {
     public class Pack : BaseRequest
     {

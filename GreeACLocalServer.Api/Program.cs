@@ -3,14 +3,14 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Configuration;
-using GreeACHeartBeatServer.Api.Services;
-using GreeACHeartBeatServer.Api.Options;
+using GreeACLocalServer.Api.Services;
+using GreeACLocalServer.Api.Options;
 using Serilog;
 using Microsoft.Extensions.Hosting.Systemd;
 using Microsoft.Extensions.Hosting.WindowsServices;
 using System;
 
-namespace GreeACHeartBeatServer.Api
+namespace GreeACLocalServer.Api
 {
     class Program
     {
