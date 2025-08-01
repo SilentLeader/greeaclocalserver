@@ -8,12 +8,13 @@ using GreeACHeartBeatServer.Api.Options;
 using Serilog;
 using Microsoft.Extensions.Hosting.Systemd;
 using Microsoft.Extensions.Hosting.WindowsServices;
+using System;
 
 namespace GreeACHeartBeatServer.Api
 {
     class Program
     {
-        static void Main(string[] args)
+        static async Task Main(string[] args)
         {
             Log.Logger = new LoggerConfiguration()
                 .ReadFrom.Configuration(new ConfigurationBuilder()
@@ -22,26 +23,37 @@ namespace GreeACHeartBeatServer.Api
                     .Build())
                 .CreateLogger();
 
-            var hostBuilder = Host.CreateDefaultBuilder(args)
-                .UseSerilog()
-                .ConfigureAppConfiguration((hostingContext, config) =>
-                {
-                    config.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
-                    config.AddJsonFile("appsettings.dev.json", optional: true, reloadOnChange: true);
-                })
-                .ConfigureServices((context, services) =>
-                {
-                    services.AddSingleton<CryptoService>();
-                    services.AddSingleton<MessageHandlerService>();
-                    services.AddSingleton<SocketHandlerService>();
-                    services.Configure<ServerOptions>(context.Configuration.GetSection("Server"));
-                    services.AddHostedService<SocketHandlerBackgroundService>();
-                })
-                .UseSystemd()
-                .UseWindowsService();
+            try
+            {
+                var hostBuilder = Host.CreateDefaultBuilder(args)
+                    .UseSerilog()
+                    .ConfigureAppConfiguration((hostingContext, config) =>
+                    {
+                        config.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
+                        config.AddJsonFile("appsettings.dev.json", optional: true, reloadOnChange: true);
+                    })
+                    .ConfigureServices((context, services) =>
+                    {
+                        services.AddSingleton<CryptoService>();
+                        services.AddSingleton<MessageHandlerService>();
+                        services.AddSingleton<SocketHandlerService>();
+                        services.Configure<ServerOptions>(context.Configuration.GetSection("Server"));
+                        services.AddHostedService<SocketHandlerBackgroundService>();
+                    })
+                    .UseSystemd()
+                    .UseWindowsService();
 
-            var host = hostBuilder.Build();
-            host.Run();
+                var host = hostBuilder.Build();
+                await host.RunAsync();
+            }
+            catch (Exception ex)
+            {
+                Log.Fatal(ex, "Host terminated unexpectedly");
+            }
+            finally
+            {
+                Log.CloseAndFlush();
+            }
         }
     }
 }
