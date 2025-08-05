@@ -64,7 +64,7 @@ public class MessageHandlerService(CryptoService cryptoService, IOptions<ServerO
 
     private GreeHandlerResponse HandleDiscover(DefaultRequest req)
     {
-        _logger.LogInformation("Request: Discover");
+        _logger.LogDebug("Request: Discover");
 
         var discoverResponse = new DiscoverResponse
         {

@@ -115,7 +115,7 @@ namespace GreeACLocalServer.Api.Services
                         }
                     }
 
-                    _logger.LogInformation("Connection close.");
+                    _logger.LogDebug("Connection close.");
 
                 }
                 catch (IOException e)
