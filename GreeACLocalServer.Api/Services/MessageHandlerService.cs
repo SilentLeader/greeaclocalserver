@@ -5,6 +5,8 @@ using GreeACLocalServer.Api.ValueObjects;
 using Microsoft.Extensions.Options;
 using GreeACLocalServer.Api.Options;
 using Microsoft.Extensions.Logging;
+using GreeACLocalServer.Api.Models;
+using GreeHandlerResponse = GreeACLocalServer.Api.Models.GreeHandlerResponse;
 
 namespace GreeACLocalServer.Api.Services;
 
@@ -58,6 +60,7 @@ public class MessageHandlerService(CryptoService cryptoService, IOptions<ServerO
 
         _logger.LogDebug("Response: {Response}", response.Data);
         response.Data = response.Data.Trim() + "\n";
+        response.MacAddress = request.MacAddress;
 
         return response;
     }
@@ -92,7 +95,8 @@ public class MessageHandlerService(CryptoService cryptoService, IOptions<ServerO
         return new GreeHandlerResponse
         {
             Data = JsonSerializer.Serialize(response, _jsonSerializerOptions),
-            KeepAlive = false
+            KeepAlive = false,
+            MacAddress = req.MacAddress
         };
     }
 
@@ -105,20 +109,24 @@ public class MessageHandlerService(CryptoService cryptoService, IOptions<ServerO
             return new GreeHandlerResponse
             {
                 Data = string.Empty,
-                KeepAlive = false
+                KeepAlive = false,
+                MacAddress = req.MacAddress
             };
         }
         switch (pack.Type)
         {
             case "devLogin":
-                return HandleDevLogin(pack);
+                var loginResponse = HandleDevLogin(pack);
+                loginResponse.MacAddress = req.MacAddress;
+                return loginResponse;
 
             default:
                 _logger.LogWarning("Request Pack unknown: {Type}", pack.Type);
                 return new GreeHandlerResponse
                 {
                     Data = string.Empty,
-                    KeepAlive = false
+                    KeepAlive = false,
+                    MacAddress = req.MacAddress
                 };
         }
     }
@@ -150,7 +158,8 @@ public class MessageHandlerService(CryptoService cryptoService, IOptions<ServerO
         return new GreeHandlerResponse
         {
             Data = JsonSerializer.Serialize(responseData, _jsonSerializerOptions),
-            KeepAlive = true
+            KeepAlive = true,
+            MacAddress = pack.MacAddress
         };
     }
 
@@ -165,7 +174,8 @@ public class MessageHandlerService(CryptoService cryptoService, IOptions<ServerO
         return new GreeHandlerResponse
         {
             Data = JsonSerializer.Serialize(responseData, _jsonSerializerOptions),
-            KeepAlive = true
+            KeepAlive = true,
+            MacAddress = null
         };
     }
 
@@ -179,7 +189,8 @@ public class MessageHandlerService(CryptoService cryptoService, IOptions<ServerO
         return new GreeHandlerResponse
         {
             Data = JsonSerializer.Serialize(responseData, _jsonSerializerOptions),
-            KeepAlive = true
+            KeepAlive = true,
+            MacAddress = null
         };
     }
 
@@ -188,7 +199,8 @@ public class MessageHandlerService(CryptoService cryptoService, IOptions<ServerO
         return new GreeHandlerResponse
         {
             Data = string.Empty,
-            KeepAlive = keepAlive
+            KeepAlive = keepAlive,
+            MacAddress = null
         };
     }
 

@@ -35,6 +35,7 @@ namespace GreeACLocalServer.Api
                     {
                         services.AddSingleton<CryptoService>();
                         services.AddSingleton<MessageHandlerService>();
+                        services.AddSingleton<DeviceManagerService>();
                         services.AddSingleton<SocketHandlerService>();
                         services.Configure<ServerOptions>(context.Configuration.GetSection("Server"));
                         services.AddHostedService<SocketHandlerBackgroundService>();

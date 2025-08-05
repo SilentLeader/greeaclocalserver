@@ -5,12 +5,14 @@ using System.Text;
 using System.Linq;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using GreeACLocalServer.Api.Responses;
+using GreeACLocalServer.Api.Models;
 using Microsoft.Extensions.Options;
 using GreeACLocalServer.Api.Options;
 using Microsoft.Extensions.Logging;
 using Serilog.Context;
 using System.Collections.Concurrent;
+using GreeACLocalServer.Api.Services;
+using GreeHandlerResponse = GreeACLocalServer.Api.Models.GreeHandlerResponse;
 
 namespace GreeACLocalServer.Api.Services
 {
@@ -21,12 +23,14 @@ namespace GreeACLocalServer.Api.Services
         private readonly MessageHandlerService _greeHandler;
         private readonly ServerOptions _serverOptions;
         private readonly ILogger<SocketHandlerService> _logger;
+        private readonly DeviceManagerService _deviceManager;
 
-        public SocketHandlerService(MessageHandlerService greeHandler, IOptions<ServerOptions> serverOptions, ILogger<SocketHandlerService> logger)
+        public SocketHandlerService(MessageHandlerService greeHandler, IOptions<ServerOptions> serverOptions, ILogger<SocketHandlerService> logger, DeviceManagerService deviceManager)
         {
             _greeHandler = greeHandler;
             _serverOptions = serverOptions.Value;
             _logger = logger;
+            _deviceManager = deviceManager;
         }
 
         public void Start()
@@ -113,10 +117,14 @@ namespace GreeACLocalServer.Api.Services
                             sWriter.WriteLine(response.Data);
                             sWriter.Flush();
                         }
+
+                        if (!string.IsNullOrEmpty(response.MacAddress))
+                        {
+                            _deviceManager.UpdateOrAdd(response.MacAddress, clientIPAddress ?? "");
+                        }
                     }
 
                     _logger.LogDebug("Connection close.");
-
                 }
                 catch (IOException e)
                 {
