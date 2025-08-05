@@ -38,6 +38,7 @@ namespace GreeACLocalServer.Api
                         services.AddSingleton<DeviceManagerService>();
                         services.AddSingleton<SocketHandlerService>();
                         services.Configure<ServerOptions>(context.Configuration.GetSection("Server"));
+                        services.Configure<DeviceManagerOptions>(context.Configuration.GetSection("DeviceManager"));
                         services.AddHostedService<SocketHandlerBackgroundService>();
                     })
                     .UseSystemd()

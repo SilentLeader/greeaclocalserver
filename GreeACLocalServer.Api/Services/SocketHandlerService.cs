@@ -16,22 +16,15 @@ using GreeHandlerResponse = GreeACLocalServer.Api.Models.GreeHandlerResponse;
 
 namespace GreeACLocalServer.Api.Services
 {
-    public class SocketHandlerService
+
+    public class SocketHandlerService(MessageHandlerService greeHandler, IOptions<ServerOptions> serverOptions, ILogger<SocketHandlerService> logger, DeviceManagerService deviceManager)
     {
         private readonly ConcurrentBag<TcpListener> _servers = new();
         private volatile bool _isRunning;
-        private readonly MessageHandlerService _greeHandler;
-        private readonly ServerOptions _serverOptions;
-        private readonly ILogger<SocketHandlerService> _logger;
-        private readonly DeviceManagerService _deviceManager;
-
-        public SocketHandlerService(MessageHandlerService greeHandler, IOptions<ServerOptions> serverOptions, ILogger<SocketHandlerService> logger, DeviceManagerService deviceManager)
-        {
-            _greeHandler = greeHandler;
-            _serverOptions = serverOptions.Value;
-            _logger = logger;
-            _deviceManager = deviceManager;
-        }
+        private readonly MessageHandlerService _greeHandler = greeHandler;
+        private readonly ServerOptions _serverOptions = serverOptions.Value;
+        private readonly ILogger<SocketHandlerService> _logger = logger;
+        private readonly DeviceManagerService _deviceManager = deviceManager;
 
         public void Start()
         {
