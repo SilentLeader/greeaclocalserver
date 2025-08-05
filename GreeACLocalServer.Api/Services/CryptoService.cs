@@ -1,20 +1,14 @@
-using System;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Options;
-using GreeACHeartBeatServer.Api.Options;
+using GreeACLocalServer.Api.Options;
 
-namespace GreeACHeartBeatServer.Api.Services;
+namespace GreeACLocalServer.Api.Services;
 
-public class CryptoService
+public class CryptoService(IOptions<ServerOptions> options)
 {
-    private readonly string _cryptoKey;
-
-    public CryptoService(IOptions<ServerOptions> options)
-    {
-        _cryptoKey = options.Value.CryptoKey;
-    }
+    private readonly string _cryptoKey = options.Value.CryptoKey;
 
     public string Decrypt(string pack)
     {

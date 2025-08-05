@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace GreeACHeartBeatServer.Api.Responses;
+namespace GreeACLocalServer.Api.Responses;
 
 public class Response : BaseResponseWithId
 {
@@ -12,5 +12,4 @@ public class Response : BaseResponseWithId
     
     [JsonPropertyName("pack")]
     public string Data { get; set; }
-    
 }

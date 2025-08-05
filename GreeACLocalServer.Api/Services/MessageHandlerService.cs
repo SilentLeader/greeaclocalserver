@@ -1,16 +1,14 @@
-using System;
-using GreeACHeartBeatServer.Api.Request;
-using GreeACHeartBeatServer.Api.Responses;
 using System.Text.Json;
-using GreeACHeartBeatServer.Api.ValueObjects;
-using GreeACHeartBeatServer.Api.Services;
+using GreeACLocalServer.Api.Request;
+using GreeACLocalServer.Api.Responses;
+using GreeACLocalServer.Api.ValueObjects;
 using Microsoft.Extensions.Options;
-using GreeACHeartBeatServer.Api.Options;
+using GreeACLocalServer.Api.Options;
 using Microsoft.Extensions.Logging;
 
-namespace GreeACHeartBeatServer.Api.Services;
+namespace GreeACLocalServer.Api.Services;
 
-public class MessageHandlerService
+public class MessageHandlerService(CryptoService cryptoService, IOptions<ServerOptions> serverOptions, ILogger<MessageHandlerService> logger)
 {
     private static JsonSerializerOptions _jsonSerializerOptions = new JsonSerializerOptions
     {
@@ -18,16 +16,9 @@ public class MessageHandlerService
         WriteIndented = false
     };
 
-    private readonly CryptoService _cryptoService;
-    private readonly ServerOptions _serverOptions;
-    private readonly ILogger<MessageHandlerService> _logger;
-
-    public MessageHandlerService(CryptoService cryptoService, IOptions<ServerOptions> serverOptions, ILogger<MessageHandlerService> logger)
-    {
-        _cryptoService = cryptoService;
-        _serverOptions = serverOptions.Value;
-        _logger = logger;
-    }
+    private readonly CryptoService _cryptoService = cryptoService;
+    private readonly ServerOptions _serverOptions = serverOptions.Value;
+    private readonly ILogger<MessageHandlerService> _logger = logger;
 
     public GreeHandlerResponse GetResponse(string input)
     {
@@ -37,7 +28,7 @@ public class MessageHandlerService
             return HandleUnknownCommand(true);
         }
 
-        DefaultRequest request;
+        DefaultRequest? request;
         try
         {
             request = JsonSerializer.Deserialize<DefaultRequest>(input);
@@ -46,6 +37,12 @@ public class MessageHandlerService
         {
             var inputBytes = System.Text.Encoding.ASCII.GetBytes(input);
             _logger.LogWarning(e, "Invalid message format. Input bytes: {InputBytes}", inputBytes);
+            return HandleUnknownCommand();
+        }
+
+        if (request == null)
+        {
+            _logger.LogWarning("Deserialization returned null");
             return HandleUnknownCommand();
         }
 
@@ -67,7 +64,7 @@ public class MessageHandlerService
 
     private GreeHandlerResponse HandleDiscover(DefaultRequest req)
     {
-        _logger.LogInformation("Request: Discover");
+        _logger.LogDebug("Request: Discover");
 
         var discoverResponse = new DiscoverResponse
         {
@@ -101,7 +98,16 @@ public class MessageHandlerService
 
     private GreeHandlerResponse HandlePack(DefaultRequest req)
     {
-        Pack pack = JsonSerializer.Deserialize<Pack>(_cryptoService.Decrypt(req.Pack));
+        Pack? pack = JsonSerializer.Deserialize<Pack>(_cryptoService.Decrypt(req.Pack));
+        if (pack == null)
+        {
+            _logger.LogWarning("Pack deserialization returned null");
+            return new GreeHandlerResponse
+            {
+                Data = string.Empty,
+                KeepAlive = false
+            };
+        }
         switch (pack.Type)
         {
             case "devLogin":

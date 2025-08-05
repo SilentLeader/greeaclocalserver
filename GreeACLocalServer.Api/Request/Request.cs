@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace GreeACHeartBeatServer.Api.Request;
+namespace GreeACLocalServer.Api.Request;
 
 public class DefaultRequest : BaseRequest
 {

@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace GreeACHeartBeatServer.Api.Options
+namespace GreeACLocalServer.Api.Options
 {
     public class ServerOptions
     {
