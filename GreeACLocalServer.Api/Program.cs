@@ -40,11 +40,12 @@ namespace GreeACLocalServer.Api
                 builder.Services.AddSingleton<MessageHandlerService>();
                 builder.Services.AddSingleton<DeviceManagerService>();
                 builder.Services.AddSingleton<SocketHandlerService>();
-                builder.Services.Configure<ServerOptions>(builder.Configuration.GetSection("ServerOptions"));
+                var serverOptionsSection = builder.Configuration.GetSection("Server");
+                builder.Services.Configure<ServerOptions>(serverOptionsSection);
                 builder.Services.Configure<DeviceManagerOptions>(builder.Configuration.GetSection("DeviceManager"));
                 builder.Services.AddHostedService<SocketHandlerBackgroundService>();
 
-                var serverOptions = builder.Configuration.GetSection("Server").Get<ServerOptions>()!;
+                var serverOptions = serverOptionsSection.Get<ServerOptions>()!;
                 if (serverOptions.EnableUI)
                 {
                     builder.Services.AddRazorComponents()
