@@ -6,6 +6,7 @@ using GreeACLocalServer.Api.Services;
 using GreeACLocalServer.Api.Options;
 using GreeACLocalServer.Api.Responses;
 using GreeACLocalServer.Api.Request;
+using System.Globalization;
 
 public class MessageHandlerServiceTests
 {
@@ -122,6 +123,32 @@ public class MessageHandlerServiceTests
         Assert.False(string.IsNullOrEmpty(result.Data));
         Assert.True(result.KeepAlive);
         Assert.Contains("hbok", result.Data); // Should contain ResponseType.HeartBeatOk
+    }
+
+    [Fact]
+    public void GetResponse_TimeRequest_TimeFormat_IsGreeStyle()
+    {
+        var service = CreateService();
+        var request = new GreeACLocalServer.Api.Request.DefaultRequest
+        {
+            Type = GreeACLocalServer.Api.ValueObjects.CommandType.Time,
+            MacAddress = "AABBCCDDEEFF"
+        };
+        var json = System.Text.Json.JsonSerializer.Serialize(request);
+        var result = service.GetResponse(json);
+
+        Assert.NotNull(result);
+        Assert.True(result.KeepAlive);
+
+        using var doc = System.Text.Json.JsonDocument.Parse(result.Data);
+        var root = doc.RootElement;
+        Assert.Equal("tm", root.GetProperty("t").GetString());
+        var time = root.GetProperty("time").GetString();
+        Assert.False(string.IsNullOrEmpty(time));
+
+        // Expect format yyyy-MM-ddHH:mm:ss (no space between day and hour)
+        var ok = DateTime.TryParseExact(time, "yyyy-MM-ddHH:mm:ss", CultureInfo.InvariantCulture, DateTimeStyles.None, out _);
+        Assert.True(ok, $"Time '{time}' did not match expected format yyyy-MM-ddHH:mm:ss");
     }
 
     // Add more tests for valid requests, mocks for CryptoService, etc.

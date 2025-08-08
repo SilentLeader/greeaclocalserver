@@ -31,8 +31,15 @@ namespace GreeACLocalServer.Api
             {
                 var builder = WebApplication.CreateBuilder(args);
                 builder.Host.UseSerilog();
-                builder.Host.UseSystemd();
-                builder.Host.UseWindowsService();
+                // Gate service hosting integration by OS
+                if (OperatingSystem.IsLinux())
+                {
+                    builder.Host.UseSystemd();
+                }
+                if (OperatingSystem.IsWindows())
+                {
+                    builder.Host.UseWindowsService();
+                }
                 builder.Configuration.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
                 builder.Configuration.AddJsonFile("appsettings.dev.json", optional: true, reloadOnChange: true);
 
@@ -65,9 +72,8 @@ namespace GreeACLocalServer.Api
                     else
                     {
                         app.UseHsts();
+                        app.UseHttpsRedirection();
                     }
-
-                    app.UseHttpsRedirection();
 
                     app.UseAntiforgery();
 

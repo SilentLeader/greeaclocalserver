@@ -8,8 +8,8 @@ public class Response : BaseResponseWithId
     public int ObjectCount { get; set; }
     
     [JsonPropertyName("tcid")]
-    public string MacAddress { get; set; }
+    public string MacAddress { get; set; } = string.Empty;
     
     [JsonPropertyName("pack")]
-    public string Data { get; set; }
+    public string Data { get; set; } = string.Empty;
 }

@@ -5,5 +5,5 @@ namespace GreeACLocalServer.Api.Request;
 public class DefaultRequest : BaseRequest
 {
     [JsonPropertyName("pack")]
-    public string Pack { get; set; }
+    public string Pack { get; set; } = string.Empty;
 }

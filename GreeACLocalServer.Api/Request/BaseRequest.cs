@@ -5,8 +5,8 @@ namespace GreeACLocalServer.Api.Request;
 public abstract class BaseRequest
 {
     [JsonPropertyName("t")]
-    public string Type { get; set; }
+    public string Type { get; set; } = string.Empty;
 
     [JsonPropertyName("mac")]
-    public string MacAddress { get; set; }
+    public string MacAddress { get; set; } = string.Empty;
 }

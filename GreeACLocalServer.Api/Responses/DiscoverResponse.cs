@@ -5,22 +5,22 @@ namespace GreeACLocalServer.Api.Responses;
 public class DiscoverResponse : BaseResponse
 {
     [JsonPropertyName("datHost")]
-    public string ServerHost { get; set; }
+    public string ServerHost { get; set; } = string.Empty;
     
     [JsonPropertyName("datHostPort")]
     public int ServerPort { get; set; }
     
     [JsonPropertyName("host")]
-    public string HostOrIpAddress { get; set; }
+    public string HostOrIpAddress { get; set; } = string.Empty;
     
     [JsonPropertyName("ip")]
-    public string Ip { get; set; }
+    public string Ip { get; set; } = string.Empty;
     
     [JsonPropertyName("ip2")]
-    public string SecondaryIp { get; set; }
+    public string SecondaryIp { get; set; } = string.Empty;
     
     [JsonPropertyName("protocol")]
-    public string Protocol { get; set; }
+    public string Protocol { get; set; } = string.Empty;
     
     [JsonPropertyName("tcpPort")]
     public int TcpPort { get; set; }

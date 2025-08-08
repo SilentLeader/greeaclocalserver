@@ -8,7 +8,7 @@ namespace GreeACLocalServer.Api.Services;
 
 public class CryptoService(IOptions<ServerOptions> options)
 {
-    private readonly string _cryptoKey = options.Value.CryptoKey;
+    private readonly string _cryptoKey = options.Value.CryptoKey ?? throw new InvalidOperationException("ServerOptions:CryptoKey must be configured.");
 
     public string Decrypt(string pack)
     {

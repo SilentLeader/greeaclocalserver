@@ -18,9 +18,9 @@ public class MessageHandlerService(CryptoService cryptoService, IOptions<ServerO
         WriteIndented = false
     };
 
-    private readonly CryptoService _cryptoService = cryptoService;
-    private readonly ServerOptions _serverOptions = serverOptions.Value;
-    private readonly ILogger<MessageHandlerService> _logger = logger;
+    private readonly CryptoService _cryptoService = cryptoService ?? throw new ArgumentNullException(nameof(cryptoService));
+    private readonly ServerOptions _serverOptions = serverOptions?.Value ?? throw new ArgumentNullException(nameof(serverOptions));
+    private readonly ILogger<MessageHandlerService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
     public GreeHandlerResponse GetResponse(string input)
     {
@@ -71,11 +71,11 @@ public class MessageHandlerService(CryptoService cryptoService, IOptions<ServerO
 
         var discoverResponse = new DiscoverResponse
         {
-            ServerHost = _serverOptions.DomainName,
+            ServerHost = _serverOptions.DomainName!,
             ServerPort = _serverOptions.Port,
-            HostOrIpAddress = _serverOptions.ExternalIp,
-            Ip = _serverOptions.ExternalIp,
-            SecondaryIp = _serverOptions.ExternalIp,
+            HostOrIpAddress = _serverOptions.ExternalIp!,
+            Ip = _serverOptions.ExternalIp!,
+            SecondaryIp = _serverOptions.ExternalIp!,
             Protocol = "TCP",
             ResponseType = ResponseType.Server,
             TcpPort = _serverOptions.Port,
@@ -147,7 +147,7 @@ public class MessageHandlerService(CryptoService cryptoService, IOptions<ServerO
 
         var responseData = new Response
         {
-            ResponseType = CommandType.Pack,
+            ResponseType = ResponseType.Pack,
             ObjectCount = 1,
             MacAddress = string.Empty,
             Cid = string.Empty,
