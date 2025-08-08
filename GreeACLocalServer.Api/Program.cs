@@ -48,7 +48,7 @@ namespace GreeACLocalServer.Api
                 builder.Services.AddSingleton<CryptoService>();
                 builder.Services.AddSingleton<MessageHandlerService>();
                 builder.Services.AddSingleton<IInternalDeviceManagerService, DeviceManagerService>();
-                builder.Services.AddSingleton<IDeviceManagerService, DeviceManagerService>();
+                builder.Services.AddSingleton<IDeviceManagerService>(x => x.GetService<IInternalDeviceManagerService>());
                 builder.Services.AddSingleton<SocketHandlerService>();
                 var serverOptionsSection = builder.Configuration.GetSection("Server");
                 builder.Services.Configure<ServerOptions>(serverOptionsSection);

@@ -9,4 +9,7 @@ public abstract class BaseRequest
 
     [JsonPropertyName("mac")]
     public string MacAddress { get; set; } = string.Empty;
+
+    [JsonPropertyName("cid")]
+    public string CID { get; set; } = string.Empty;
 }

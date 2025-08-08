@@ -60,7 +60,7 @@ public class MessageHandlerService(CryptoService cryptoService, IOptions<ServerO
 
         _logger.LogDebug("Response: {Response}", response.Data);
         response.Data = response.Data.Trim() + "\n";
-        response.MacAddress = request.MacAddress;
+        response.MacAddress = !string.IsNullOrWhiteSpace(request.MacAddress) ? request.MacAddress : request.CID;
 
         return response;
     }
