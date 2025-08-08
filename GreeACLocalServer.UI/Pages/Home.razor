@@ -3,6 +3,7 @@
 @rendermode InteractiveAuto
 @inject IDeviceManagerService DeviceService
 @using Microsoft.AspNetCore.SignalR.Client
+@using GreeACLocalServer.UI.Services
 
 
 <PageTitle>Devices</PageTitle>
@@ -49,17 +50,15 @@ else
             var items = await DeviceService.GetAllDeviceStatesAsync();
             _devices = items.ToList();
 
-            // Build SignalR connection
+            // Build SignalR connection with custom retry policy: start 5s, +5s each time, cap 60s
             _hub = new HubConnectionBuilder()
                 .WithUrl(Navigation.ToAbsoluteUri("/hubs/devices"))
-                .WithStatefulReconnect()
-                .WithAutomaticReconnect()
+                .WithAutomaticReconnect(new LinearBackoffRetryPolicy(5, 5, 60))
                 .Build();
 
             _hub.On<IEnumerable<DeviceDto>>("DevicesSnapshot", async snapshot =>
             {
                 _devices = snapshot.ToList();
-                Console.WriteLine("Signalr DevicesSnapshot");
                 await InvokeAsync(StateHasChanged);
             });
 
@@ -74,7 +73,6 @@ else
                 {
                     _devices.Add(dto);
                 }
-                Console.WriteLine("Signalr upsert");
                 await InvokeAsync(StateHasChanged);
             });
 
