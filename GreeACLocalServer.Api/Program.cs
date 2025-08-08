@@ -8,6 +8,11 @@ using Serilog;
 using Microsoft.Extensions.Hosting.Systemd;
 using Microsoft.Extensions.Hosting.WindowsServices;
 using System;
+using GreeACLocalServer.UI;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Web;
+using GreeACLocalServer.Api.Components;
 
 namespace GreeACLocalServer.Api
 {
@@ -24,28 +29,56 @@ namespace GreeACLocalServer.Api
 
             try
             {
-                var hostBuilder = Host.CreateDefaultBuilder(args)
-                    .UseSerilog()
-                    .ConfigureAppConfiguration((hostingContext, config) =>
-                    {
-                        config.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
-                        config.AddJsonFile("appsettings.dev.json", optional: true, reloadOnChange: true);
-                    })
-                    .ConfigureServices((context, services) =>
-                    {
-                        services.AddSingleton<CryptoService>();
-                        services.AddSingleton<MessageHandlerService>();
-                        services.AddSingleton<DeviceManagerService>();
-                        services.AddSingleton<SocketHandlerService>();
-                        services.Configure<ServerOptions>(context.Configuration.GetSection("Server"));
-                        services.Configure<DeviceManagerOptions>(context.Configuration.GetSection("DeviceManager"));
-                        services.AddHostedService<SocketHandlerBackgroundService>();
-                    })
-                    .UseSystemd()
-                    .UseWindowsService();
+                var builder = WebApplication.CreateBuilder(args);
+                builder.WebHost.UseUrls("http://*:5100");
+                builder.Host.UseSerilog();
+                builder.Host.UseSystemd();
+                builder.Host.UseWindowsService();
+                builder.Configuration.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
+                builder.Configuration.AddJsonFile("appsettings.dev.json", optional: true, reloadOnChange: true);
 
-                var host = hostBuilder.Build();
-                await host.RunAsync();
+                builder.Services.AddSingleton<CryptoService>();
+                builder.Services.AddSingleton<MessageHandlerService>();
+                builder.Services.AddSingleton<DeviceManagerService>();
+                builder.Services.AddSingleton<SocketHandlerService>();
+                builder.Services.Configure<ServerOptions>(builder.Configuration.GetSection("ServerOptions"));
+                builder.Services.Configure<DeviceManagerOptions>(builder.Configuration.GetSection("DeviceManager"));
+                builder.Services.AddHostedService<SocketHandlerBackgroundService>();
+
+                var serverOptions = builder.Configuration.GetSection("Server").Get<ServerOptions>()!;
+                if (serverOptions.EnableUI)
+                {
+                    builder.Services.AddRazorComponents()
+                        .AddInteractiveServerComponents()
+                        .AddInteractiveWebAssemblyComponents();
+                }
+
+                var app = builder.Build();
+
+                if (serverOptions.EnableUI)
+                {
+                    // Configure the HTTP request pipeline.
+                    if (app.Environment.IsDevelopment())
+                    {
+                        app.UseWebAssemblyDebugging();
+                    }
+                    else
+                    {
+                        app.UseHsts();
+                    }
+
+                    app.UseHttpsRedirection();
+
+                    app.UseAntiforgery();
+
+                    app.MapStaticAssets();
+                    app.MapRazorComponents<App>()
+                        .AddInteractiveServerRenderMode()
+                        .AddInteractiveWebAssemblyRenderMode()
+                        .AddAdditionalAssemblies(typeof(GreeACLocalServer.UI._Imports).Assembly);
+                }
+
+                await app.RunAsync();
             }
             catch (Exception ex)
             {
