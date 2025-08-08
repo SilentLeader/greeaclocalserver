@@ -4,6 +4,7 @@
 @inject IDeviceManagerService DeviceService
 @using Microsoft.AspNetCore.SignalR.Client
 @using GreeACLocalServer.UI.Services
+@using GreeACLocalServer.Shared.ValueObjects
 
 
 <PageTitle>Devices</PageTitle>
@@ -56,13 +57,13 @@ else
                 .WithAutomaticReconnect(new LinearBackoffRetryPolicy(5, 5, 60))
                 .Build();
 
-            _hub.On<IEnumerable<DeviceDto>>("DevicesSnapshot", async snapshot =>
+            _hub.On<IEnumerable<DeviceDto>>(DeviceHubMethods.DevicesSnapshot, async snapshot =>
             {
                 _devices = snapshot.ToList();
                 await InvokeAsync(StateHasChanged);
             });
 
-            _hub.On<DeviceDto>("DeviceUpserted", async dto =>
+            _hub.On<DeviceDto>(DeviceHubMethods.DeviceUpserted, async dto =>
             {
                 var idx = _devices.FindIndex(d => string.Equals(d.MacAddress, dto.MacAddress, StringComparison.OrdinalIgnoreCase));
                 if (idx >= 0)
@@ -76,7 +77,7 @@ else
                 await InvokeAsync(StateHasChanged);
             });
 
-            _hub.On<string>("DeviceRemoved", async mac =>
+            _hub.On<string>(DeviceHubMethods.DeviceRemoved, async mac =>
             {
                 _devices.RemoveAll(d => string.Equals(d.MacAddress, mac, StringComparison.OrdinalIgnoreCase));
                 _devices = _devices.ToList();

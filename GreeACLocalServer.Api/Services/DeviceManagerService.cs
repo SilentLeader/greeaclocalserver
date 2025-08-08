@@ -10,14 +10,15 @@ using Microsoft.Extensions.Options;
 using GreeACLocalServer.Shared.Contracts;
 using Microsoft.AspNetCore.SignalR;
 using GreeACLocalServer.Api.Hubs;
+using GreeACLocalServer.Shared.ValueObjects;
 
 namespace GreeACLocalServer.Api.Services;
 
-public class DeviceManagerService(IOptions<DeviceManagerOptions> options, IHubContext<DeviceHub>? hubContext) : IInternalDeviceManagerService
+public class DeviceManagerService(IOptions<DeviceManagerOptions> options, IHubContext<DeviceHub> hubContext) : IInternalDeviceManagerService
 {
     private readonly ConcurrentDictionary<string, AcDeviceState> _deviceStates = new();
     private readonly DeviceManagerOptions _options = options.Value;
-    private readonly IHubContext<DeviceHub>? _hub = hubContext;
+    private readonly IHubContext<DeviceHub> _hub = hubContext;
 
     public void UpdateOrAdd(string macAddress, string ipAddress)
     {
@@ -37,7 +38,7 @@ public class DeviceManagerService(IOptions<DeviceManagerOptions> options, IHubCo
 
         // Broadcast upsert
         var dto = new DeviceDto(state.MacAddress, state.IpAddress, state.LastConnectionTime);
-        _ = _hub?.Clients.All.SendAsync("DeviceUpserted", dto);
+        _ = _hub.Clients.All.SendAsync(DeviceHubMethods.DeviceUpserted, dto);
     }
 
     public void RemoveStaleDevices()
@@ -57,7 +58,7 @@ public class DeviceManagerService(IOptions<DeviceManagerOptions> options, IHubCo
 
         foreach (var mac in removed)
         {
-            _ = _hub?.Clients.All.SendAsync("DeviceRemoved", mac);
+            _ = _hub.Clients.All.SendAsync(DeviceHubMethods.DeviceRemoved, mac);
         }
     }
 
