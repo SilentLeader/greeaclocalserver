@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using GreeACLocalServer.Api.Components;
 using GreeACLocalServer.Shared.Contracts;
+using GreeACLocalServer.Shared.Interfaces;
 
 namespace GreeACLocalServer.Api
 {
@@ -47,6 +48,7 @@ namespace GreeACLocalServer.Api
                 builder.Services.AddSingleton<CryptoService>();
                 builder.Services.AddSingleton<MessageHandlerService>();
                 builder.Services.AddSingleton<IInternalDeviceManagerService, DeviceManagerService>();
+                builder.Services.AddSingleton<IDeviceManagerService, DeviceManagerService>();
                 builder.Services.AddSingleton<SocketHandlerService>();
                 var serverOptionsSection = builder.Configuration.GetSection("Server");
                 builder.Services.Configure<ServerOptions>(serverOptionsSection);
@@ -69,14 +71,14 @@ namespace GreeACLocalServer.Api
 
                 // Minimal API endpoints under /api
                 var api = app.MapGroup("/api");
-                api.MapGet("/devices", (IInternalDeviceManagerService dms) =>
+                api.MapGet("/devices", async (IInternalDeviceManagerService dms) =>
                 {
-                    var list = dms.GetAllDeviceStates();
+                    var list = await dms.GetAllDeviceStatesAsync();
                     return Results.Ok(list);
                 });
-                api.MapGet("/devices/{mac}", (string mac, IInternalDeviceManagerService dms) =>
+                api.MapGet("/devices/{mac}", async (string mac, IInternalDeviceManagerService dms) =>
                 {
-                    var device = dms.Get(mac);
+                    var device = await dms.GetAsync(mac);
                     return device is null
                         ? Results.NotFound()
                         : Results.Ok(device);

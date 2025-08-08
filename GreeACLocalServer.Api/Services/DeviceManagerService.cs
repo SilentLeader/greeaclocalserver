@@ -2,6 +2,8 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using GreeACLocalServer.Api.Models;
 using GreeACLocalServer.Api.Options;
 using Microsoft.Extensions.Options;
@@ -41,19 +43,20 @@ public class DeviceManagerService(IOptions<DeviceManagerOptions> options) : IInt
         }
     }
 
-    public IEnumerable<DeviceDto> GetAllDeviceStates()
+    public Task<IEnumerable<DeviceDto>> GetAllDeviceStatesAsync(CancellationToken cancellationToken = default)
     {
         RemoveStaleDevices();
-        return _deviceStates.Values.Select(v => new DeviceDto(v.MacAddress, v.IpAddress, v.LastConnectionTime));
+        IEnumerable<DeviceDto> result = _deviceStates.Values.Select(v => new DeviceDto(v.MacAddress, v.IpAddress, v.LastConnectionTime));
+        return Task.FromResult(result);
     }
 
-    public DeviceDto? Get(string macAddress)
+    public Task<DeviceDto?> GetAsync(string macAddress, CancellationToken cancellationToken = default)
     {
         RemoveStaleDevices();
         if (_deviceStates.TryGetValue(macAddress, out var state))
         {
-            return new DeviceDto(state.MacAddress, state.IpAddress, state.LastConnectionTime);
+            return Task.FromResult<DeviceDto?>(new DeviceDto(state.MacAddress, state.IpAddress, state.LastConnectionTime));
         }
-        return null;
+        return Task.FromResult<DeviceDto?>(null);
     }
 }

@@ -1,7 +1,55 @@
 ﻿@page "/"
+@inject IDeviceManagerService DeviceService
 
-<PageTitle>Home</PageTitle>
+<PageTitle>Devices</PageTitle>
 
-<h1>Hello, world!</h1>
+<h1>Devices</h1>
 
-Welcome to your new app.
+@if (_loading)
+{
+    <p>Loading devices...</p>
+}
+else if (_error is not null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else if (_devices.Count == 0)
+{
+    <p>No devices found.</p>
+}
+else
+{
+    <ul>
+        @foreach (var d in _devices)
+        {
+            <li>
+                <strong>@d.MacAddress</strong>
+                <div>IP: @d.IpAddress</div>
+                <div>Last Seen (UTC): @d.LastConnectionTimeUtc.ToString("u")</div>
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    private bool _loading = true;
+    private string? _error;
+    private List<DeviceDto> _devices = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var items = await DeviceService.GetAllDeviceStatesAsync();
+            _devices = items.ToList();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

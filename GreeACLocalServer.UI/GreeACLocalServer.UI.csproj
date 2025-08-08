@@ -10,4 +10,9 @@
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="9.0.7" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Reference shared contracts/interfaces -->
+    <ProjectReference Include="../GreeACLocalServer.Shared/GreeACLocalServer.Shared.csproj" />
+  </ItemGroup>
+
 </Project>
