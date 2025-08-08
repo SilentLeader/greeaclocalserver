@@ -30,7 +30,6 @@ namespace GreeACLocalServer.Api
             try
             {
                 var builder = WebApplication.CreateBuilder(args);
-                builder.WebHost.UseUrls("http://*:5100");
                 builder.Host.UseSerilog();
                 builder.Host.UseSystemd();
                 builder.Host.UseWindowsService();
