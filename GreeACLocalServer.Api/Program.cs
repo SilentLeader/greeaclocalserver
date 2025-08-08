@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using GreeACLocalServer.Api.Components;
+using GreeACLocalServer.Shared.Contracts;
 
 namespace GreeACLocalServer.Api
 {
@@ -45,12 +46,16 @@ namespace GreeACLocalServer.Api
 
                 builder.Services.AddSingleton<CryptoService>();
                 builder.Services.AddSingleton<MessageHandlerService>();
-                builder.Services.AddSingleton<DeviceManagerService>();
+                builder.Services.AddSingleton<IInternalDeviceManagerService, DeviceManagerService>();
                 builder.Services.AddSingleton<SocketHandlerService>();
                 var serverOptionsSection = builder.Configuration.GetSection("Server");
                 builder.Services.Configure<ServerOptions>(serverOptionsSection);
                 builder.Services.Configure<DeviceManagerOptions>(builder.Configuration.GetSection("DeviceManager"));
                 builder.Services.AddHostedService<SocketHandlerBackgroundService>();
+
+                // Minimal APIs support and Swagger for dev
+                builder.Services.AddEndpointsApiExplorer();
+                builder.Services.AddSwaggerGen();
 
                 var serverOptions = serverOptionsSection.Get<ServerOptions>()!;
                 if (serverOptions.EnableUI)
@@ -61,6 +66,27 @@ namespace GreeACLocalServer.Api
                 }
 
                 var app = builder.Build();
+
+                // Minimal API endpoints under /api
+                var api = app.MapGroup("/api");
+                api.MapGet("/devices", (IInternalDeviceManagerService dms) =>
+                {
+                    var list = dms.GetAllDeviceStates();
+                    return Results.Ok(list);
+                });
+                api.MapGet("/devices/{mac}", (string mac, IInternalDeviceManagerService dms) =>
+                {
+                    var device = dms.Get(mac);
+                    return device is null
+                        ? Results.NotFound()
+                        : Results.Ok(device);
+                });
+
+                if (app.Environment.IsDevelopment())
+                {
+                    app.UseSwagger();
+                    app.UseSwaggerUI();
+                }
 
                 if (serverOptions.EnableUI)
                 {

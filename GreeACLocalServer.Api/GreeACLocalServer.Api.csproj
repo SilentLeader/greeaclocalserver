@@ -11,8 +11,10 @@
     <PackageReference Include="Serilog.AspNetCore" Version="7.0.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Systemd" Version="9.0.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="9.0.0" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\GreeACLocalServer.UI\GreeACLocalServer.UI.csproj" />
+    <ProjectReference Include="..\GreeACLocalServer.Shared\GreeACLocalServer.Shared.csproj" />
   </ItemGroup>
 </Project>

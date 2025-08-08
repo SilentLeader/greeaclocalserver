@@ -1,14 +1,15 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using GreeACLocalServer.Api.Models;
 using GreeACLocalServer.Api.Options;
 using Microsoft.Extensions.Options;
-using GreeHandlerResponse = GreeACLocalServer.Api.Models.GreeHandlerResponse;
+using GreeACLocalServer.Shared.Contracts;
 
 namespace GreeACLocalServer.Api.Services;
 
-public class DeviceManagerService(IOptions<DeviceManagerOptions> options)
+public class DeviceManagerService(IOptions<DeviceManagerOptions> options) : IInternalDeviceManagerService
 {
     private readonly ConcurrentDictionary<string, AcDeviceState> _deviceStates = new();
     private readonly DeviceManagerOptions _options = options.Value;
@@ -40,9 +41,19 @@ public class DeviceManagerService(IOptions<DeviceManagerOptions> options)
         }
     }
 
-    public IEnumerable<AcDeviceState> GetAllDeviceStates()
+    public IEnumerable<DeviceDto> GetAllDeviceStates()
     {
         RemoveStaleDevices();
-        return _deviceStates.Values;
+        return _deviceStates.Values.Select(v => new DeviceDto(v.MacAddress, v.IpAddress, v.LastConnectionTime));
+    }
+
+    public DeviceDto? Get(string macAddress)
+    {
+        RemoveStaleDevices();
+        if (_deviceStates.TryGetValue(macAddress, out var state))
+        {
+            return new DeviceDto(state.MacAddress, state.IpAddress, state.LastConnectionTime);
+        }
+        return null;
     }
 }
