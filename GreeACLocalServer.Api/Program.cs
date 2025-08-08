@@ -15,6 +15,7 @@ using Microsoft.AspNetCore.Components.Web;
 using GreeACLocalServer.Api.Components;
 using GreeACLocalServer.Shared.Contracts;
 using GreeACLocalServer.Shared.Interfaces;
+using GreeACLocalServer.Api.Hubs;
 
 namespace GreeACLocalServer.Api
 {
@@ -48,20 +49,22 @@ namespace GreeACLocalServer.Api
                 builder.Services.AddSingleton<CryptoService>();
                 builder.Services.AddSingleton<MessageHandlerService>();
                 builder.Services.AddSingleton<IInternalDeviceManagerService, DeviceManagerService>();
-                builder.Services.AddSingleton<IDeviceManagerService>(x => x.GetService<IInternalDeviceManagerService>());
+                builder.Services.AddSingleton<IDeviceManagerService>(x => x.GetRequiredService<IInternalDeviceManagerService>());
                 builder.Services.AddSingleton<SocketHandlerService>();
                 var serverOptionsSection = builder.Configuration.GetSection("Server");
                 builder.Services.Configure<ServerOptions>(serverOptionsSection);
                 builder.Services.Configure<DeviceManagerOptions>(builder.Configuration.GetSection("DeviceManager"));
                 builder.Services.AddHostedService<SocketHandlerBackgroundService>();
 
-                // Minimal APIs support and Swagger for dev
-                builder.Services.AddEndpointsApiExplorer();
-                builder.Services.AddSwaggerGen();
-
                 var serverOptions = serverOptionsSection.Get<ServerOptions>()!;
                 if (serverOptions.EnableUI)
                 {
+                    // SignalR
+                    builder.Services.AddSignalR();
+
+                    // Minimal APIs support and Swagger for dev
+                    builder.Services.AddEndpointsApiExplorer();
+                    builder.Services.AddSwaggerGen();
                     builder.Services.AddRazorComponents()
                         .AddInteractiveServerComponents()
                         .AddInteractiveWebAssemblyComponents();
@@ -69,29 +72,39 @@ namespace GreeACLocalServer.Api
 
                 var app = builder.Build();
 
-                // Minimal API endpoints under /api
-                var api = app.MapGroup("/api");
-                api.MapGet("/devices", async (IInternalDeviceManagerService dms) =>
-                {
-                    var list = await dms.GetAllDeviceStatesAsync();
-                    return Results.Ok(list);
-                });
-                api.MapGet("/devices/{mac}", async (string mac, IInternalDeviceManagerService dms) =>
-                {
-                    var device = await dms.GetAsync(mac);
-                    return device is null
-                        ? Results.NotFound()
-                        : Results.Ok(device);
-                });
-
-                if (app.Environment.IsDevelopment())
-                {
-                    app.UseSwagger();
-                    app.UseSwaggerUI();
-                }
-
                 if (serverOptions.EnableUI)
                 {
+                    // Minimal API endpoints under /api
+                    var api = app.MapGroup("/api");
+                    api.MapGet("/devices", async (IInternalDeviceManagerService dms) =>
+                    {
+                        var list = await dms.GetAllDeviceStatesAsync();
+                        return Results.Ok(list);
+                    });
+                    api.MapGet("/devices/{mac}", async (string mac, IInternalDeviceManagerService dms) =>
+                    {
+                        var device = await dms.GetAsync(mac);
+                        return device is null
+                            ? Results.NotFound()
+                            : Results.Ok(device);
+                    });
+
+                    // Map SignalR hubs
+                    app.MapHub<DeviceHub>("/hubs/devices", options =>
+                    {
+                        options.AllowStatefulReconnects = true;
+                    });
+
+                    if (app.Environment.IsDevelopment())
+                    {
+                        app.UseSwagger();
+                        app.UseSwaggerUI();
+                    }
+                    else
+                    {
+                        app.UseResponseCompression();
+                    }
+
                     // Configure the HTTP request pipeline.
                     if (app.Environment.IsDevelopment())
                     {
@@ -107,7 +120,7 @@ namespace GreeACLocalServer.Api
 
                     app.MapStaticAssets();
                     app.MapRazorComponents<App>()
-                        .AddInteractiveServerRenderMode()
+                        .AddInteractiveServerRenderMode(o => o.DisableWebSocketCompression = true)
                         .AddInteractiveWebAssemblyRenderMode()
                         .AddAdditionalAssemblies(typeof(GreeACLocalServer.UI._Imports).Assembly);
                 }

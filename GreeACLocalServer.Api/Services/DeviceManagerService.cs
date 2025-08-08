@@ -8,17 +8,20 @@ using GreeACLocalServer.Api.Models;
 using GreeACLocalServer.Api.Options;
 using Microsoft.Extensions.Options;
 using GreeACLocalServer.Shared.Contracts;
+using Microsoft.AspNetCore.SignalR;
+using GreeACLocalServer.Api.Hubs;
 
 namespace GreeACLocalServer.Api.Services;
 
-public class DeviceManagerService(IOptions<DeviceManagerOptions> options) : IInternalDeviceManagerService
+public class DeviceManagerService(IOptions<DeviceManagerOptions> options, IHubContext<DeviceHub>? hubContext) : IInternalDeviceManagerService
 {
     private readonly ConcurrentDictionary<string, AcDeviceState> _deviceStates = new();
     private readonly DeviceManagerOptions _options = options.Value;
+    private readonly IHubContext<DeviceHub>? _hub = hubContext;
 
     public void UpdateOrAdd(string macAddress, string ipAddress)
     {
-        _deviceStates.AddOrUpdate(macAddress,
+        var state = _deviceStates.AddOrUpdate(macAddress,
             key => new AcDeviceState
             {
                 MacAddress = macAddress,
@@ -31,15 +34,30 @@ public class DeviceManagerService(IOptions<DeviceManagerOptions> options) : IInt
                 existing.LastConnectionTime = DateTime.UtcNow;
                 return existing;
             });
+
+        // Broadcast upsert
+        var dto = new DeviceDto(state.MacAddress, state.IpAddress, state.LastConnectionTime);
+        _ = _hub?.Clients.All.SendAsync("DeviceUpserted", dto);
     }
 
     public void RemoveStaleDevices()
     {
         var threshold = DateTime.UtcNow.AddMinutes(-_options.DeviceTimeoutMinutes);
+        var removed = new List<string>();
         foreach (var kvp in _deviceStates)
         {
             if (kvp.Value.LastConnectionTime < threshold)
-                _deviceStates.TryRemove(kvp.Key, out _);
+            {
+                if (_deviceStates.TryRemove(kvp.Key, out _))
+                {
+                    removed.Add(kvp.Key);
+                }
+            }
+        }
+
+        foreach (var mac in removed)
+        {
+            _ = _hub?.Clients.All.SendAsync("DeviceRemoved", mac);
         }
     }
 

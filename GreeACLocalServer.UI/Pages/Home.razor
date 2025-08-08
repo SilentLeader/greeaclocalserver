@@ -1,5 +1,9 @@
 ﻿@page "/"
+@implements IAsyncDisposable
+@rendermode InteractiveAuto
 @inject IDeviceManagerService DeviceService
+@using Microsoft.AspNetCore.SignalR.Client
+
 
 <PageTitle>Devices</PageTitle>
 
@@ -22,7 +26,7 @@ else
     <ul>
         @foreach (var d in _devices)
         {
-            <li>
+            <li @key="d.MacAddress">
                 <strong>@d.MacAddress</strong>
                 <div>IP: @d.IpAddress</div>
                 <div>Last Seen (UTC): @d.LastConnectionTimeUtc.ToString("u")</div>
@@ -35,13 +39,53 @@ else
     private bool _loading = true;
     private string? _error;
     private List<DeviceDto> _devices = new();
+    private HubConnection? _hub;
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
+            // Initial fetch as fallback
             var items = await DeviceService.GetAllDeviceStatesAsync();
             _devices = items.ToList();
+
+            // Build SignalR connection
+            _hub = new HubConnectionBuilder()
+                .WithUrl(Navigation.ToAbsoluteUri("/hubs/devices"))
+                .WithStatefulReconnect()
+                .WithAutomaticReconnect()
+                .Build();
+
+            _hub.On<IEnumerable<DeviceDto>>("DevicesSnapshot", async snapshot =>
+            {
+                _devices = snapshot.ToList();
+                Console.WriteLine("Signalr DevicesSnapshot");
+                await InvokeAsync(StateHasChanged);
+            });
+
+            _hub.On<DeviceDto>("DeviceUpserted", async dto =>
+            {
+                var idx = _devices.FindIndex(d => string.Equals(d.MacAddress, dto.MacAddress, StringComparison.OrdinalIgnoreCase));
+                if (idx >= 0)
+                {
+                    _devices[idx] = dto;
+                }
+                else
+                {
+                    _devices.Add(dto);
+                }
+                Console.WriteLine("Signalr upsert");
+                await InvokeAsync(StateHasChanged);
+            });
+
+            _hub.On<string>("DeviceRemoved", async mac =>
+            {
+                _devices.RemoveAll(d => string.Equals(d.MacAddress, mac, StringComparison.OrdinalIgnoreCase));
+                _devices = _devices.ToList();
+                await InvokeAsync(StateHasChanged);
+            });
+
+            await _hub.StartAsync();
         }
         catch (Exception ex)
         {
@@ -50,6 +94,16 @@ else
         finally
         {
             _loading = false;
+        }
+    }
+
+    [Inject] private NavigationManager Navigation { get; set; } = default!;
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_hub is not null)
+        {
+            await _hub.DisposeAsync();
         }
     }
 }
