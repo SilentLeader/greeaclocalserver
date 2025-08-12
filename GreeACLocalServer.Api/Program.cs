@@ -16,6 +16,7 @@ using GreeACLocalServer.Api.Components;
 using GreeACLocalServer.Shared.Contracts;
 using GreeACLocalServer.Shared.Interfaces;
 using GreeACLocalServer.Api.Hubs;
+using MudBlazor.Services;
 
 namespace GreeACLocalServer.Api
 {
@@ -65,6 +66,10 @@ namespace GreeACLocalServer.Api
                     // Minimal APIs support and Swagger for dev
                     builder.Services.AddEndpointsApiExplorer();
                     builder.Services.AddSwaggerGen();
+                    
+                    // Add MudBlazor services
+                    builder.Services.AddMudServices();
+                    
                     builder.Services.AddRazorComponents()
                         .AddInteractiveServerComponents()
                         .AddInteractiveWebAssemblyComponents();
