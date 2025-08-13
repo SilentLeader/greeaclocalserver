@@ -1,15 +1,22 @@
 ﻿@inherits LayoutComponentBase
+@implements IDisposable
 
-<MudThemeProvider />
+<MudThemeProvider @ref="_mudThemeProvider" IsDarkMode="_isDarkMode" />
 <MudPopoverProvider />
 <MudDialogProvider />
 <MudSnackbarProvider />
 
 <MudLayout>
     <MudAppBar Elevation="1">
-        <MudIconButton Icon="Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@ToggleDrawer" />
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@((e) => ToggleDrawer())" />
         <MudSpacer />
         <MudText Typo="Typo.h6">GREE AC Local Server</MudText>
+        <MudSpacer />
+        <div>@RendererInfo.Name</div>
+        <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)" 
+                       Color="Color.Inherit" 
+                       OnClick="@((e) => ToggleTheme())" 
+                       title="Toggle theme" />
     </MudAppBar>
     <MudDrawer @bind-Open="@_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="2">
         <NavMenu />
@@ -23,9 +30,48 @@
 
 @code {
     private bool _drawerOpen = true;
+    private bool _isDarkMode;
+    private MudThemeProvider _mudThemeProvider = null!;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {        
+        if (firstRender && _mudThemeProvider != null)
+        {
+            try
+            {
+                // Get system preference
+                //_isDarkMode = await _mudThemeProvider.GetSystemDarkModeAsync();
+                
+                // Watch for system changes
+                @* await _mudThemeProvider.WatchSystemDarkModeAsync(async (isDark) =>
+                {
+                    _isDarkMode = isDark;
+                    await InvokeAsync(StateHasChanged);
+                }); *@
+                
+                StateHasChanged();
+            }
+            catch
+            {
+                // Fallback to light mode if detection fails
+                _isDarkMode = false;
+                StateHasChanged();
+            }
+        }
+    }
 
     private void ToggleDrawer()
     {
         _drawerOpen = !_drawerOpen;
+    }
+
+    private void ToggleTheme()
+    {
+        _isDarkMode = !_isDarkMode;
+    }
+
+    public void Dispose()
+    {
+        // MudThemeProvider handles its own disposal
     }
 }

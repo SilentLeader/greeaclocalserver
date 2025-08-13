@@ -1,14 +1,12 @@
 ﻿@page "/"
 @implements IAsyncDisposable
-@rendermode InteractiveAuto
 @inject IDeviceManagerService DeviceService
 @using Microsoft.AspNetCore.SignalR.Client
-@using GreeACLocalServer.UI.Services
-@using GreeACLocalServer.Shared.ValueObjects
+
 
 
 <PageTitle>Devices</PageTitle>
-
+<div>@RendererInfo.Name</div>
 <MudText Typo="Typo.h4" GutterBottom="true">Air Conditioner Devices</MudText>
 
 @if (_loading)

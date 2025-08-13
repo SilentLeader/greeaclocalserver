@@ -5,23 +5,36 @@
     "version": "0.2.0",
     "configurations": [        
         {
-            "name": "GreeACLocalServer.Api Debug",
+            "name": "Debug",
             "type": "coreclr",
             "request": "launch",
-            "program": "${workspaceFolder}/GreeACLocalServer.Api/bin/Debug/net9.0/GreeACLocalServer.Api.dll",
-            "args": [],
+            "program": "dotnet",
+            "args": [
+                "watch",
+                "--project",
+                ".",
+                "--verbose" // Let's us confirm browser connects with hot reload capabilities
+            ],
             "cwd": "${workspaceFolder}/GreeACLocalServer.Api",
             "env": {
-                "DOTNET_ENVIRONMENT": "Development",
                 "ASPNETCORE_ENVIRONMENT": "Development"
             },
-            "stopAtEntry": false,
-            "console": "integratedTerminal",
-            "preLaunchTask": "build",
-            "justMyCode": true,
-            "logging": {
-                "moduleLoad": false
-            }
+            "preLaunchTask": "build"
+        },
+        {
+            "name": "Attach",
+            "type": "blazorwasm",
+            "request": "attach",
+            "cwd": "${workspaceFolder}/GreeACLocalServer.Api",
+            "browser": "chrome",
+            "url": "http://localhost:5100",
+            "timeout": 30000
+        }
+    ],
+    "compounds": [
+        {
+            "name": "Debug with Hot Reload",
+            "configurations": [ "Debug", "Attach" ]
         }
     ]
 }

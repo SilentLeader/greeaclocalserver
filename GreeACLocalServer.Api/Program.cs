@@ -67,6 +67,9 @@ namespace GreeACLocalServer.Api
                     builder.Services.AddEndpointsApiExplorer();
                     builder.Services.AddSwaggerGen();
                     
+                    // Add response compression for production
+                    builder.Services.AddResponseCompression();
+                    
                     // Add MudBlazor services
                     builder.Services.AddMudServices();
                     
@@ -94,7 +97,7 @@ namespace GreeACLocalServer.Api
                             : Results.Ok(device);
                     });
 
-                    // Map SignalR hubs
+                    // Map SignalR hubs                    
                     app.MapHub<DeviceHub>("/hubs/devices", options =>
                     {
                         options.AllowStatefulReconnects = true;
@@ -125,7 +128,6 @@ namespace GreeACLocalServer.Api
 
                     app.MapStaticAssets();
                     app.MapRazorComponents<App>()
-                        .AddInteractiveServerRenderMode(o => o.DisableWebSocketCompression = true)
                         .AddInteractiveWebAssemblyRenderMode()
                         .AddAdditionalAssemblies(typeof(GreeACLocalServer.UI._Imports).Assembly);
                 }
