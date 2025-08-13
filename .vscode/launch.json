@@ -15,8 +15,32 @@
             "url": "http://localhost:5100",
             "env": {
                 "ASPNETCORE_ENVIRONMENT": "Development"
+            },            
+            "dotNetConfig": {
+                "justMyCode": true,
+                "logging": {
+                    "moduleLoad": false
+                }
+            }
+        },
+        {
+            "name": "Debug backend",
+            "type": "coreclr",
+            "request": "launch",
+            "program": "${workspaceFolder}/GreeACLocalServer.Api/bin/Debug/net9.0/GreeACLocalServer.Api.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/GreeACLocalServer.Api",
+            "env": {
+                "DOTNET_ENVIRONMENT": "Development",
+                "ASPNETCORE_ENVIRONMENT": "Development"
             },
-            "preLaunchTask": "build"
+            "stopAtEntry": false,
+            "console": "integratedTerminal",
+            "preLaunchTask": "build",
+            "justMyCode": true,
+            "logging": {
+                "moduleLoad": false
+            }
         },
         {
             "name": "Watch",
@@ -49,6 +73,11 @@
         {
             "name": "Debug with Hot Reload",
             "configurations": [ "Watch", "Attach" ]
+        },
+        {
+            "name": "Debug with Build",
+            "configurations": [ "Debug" ],
+            "preLaunchTask": "build",
         }
     ]
 }
