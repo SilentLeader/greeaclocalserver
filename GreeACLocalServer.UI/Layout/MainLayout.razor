@@ -40,14 +40,14 @@
             try
             {
                 // Get system preference
-                //_isDarkMode = await _mudThemeProvider.GetSystemDarkModeAsync();
+                _isDarkMode = await _mudThemeProvider.GetSystemDarkModeAsync();
                 
                 // Watch for system changes
-                @* await _mudThemeProvider.WatchSystemDarkModeAsync(async (isDark) =>
+                await _mudThemeProvider.WatchSystemDarkModeAsync(async (isDark) =>
                 {
                     _isDarkMode = isDark;
                     await InvokeAsync(StateHasChanged);
-                }); *@
+                });
                 
                 StateHasChanged();
             }
