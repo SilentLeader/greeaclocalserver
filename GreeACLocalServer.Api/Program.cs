@@ -129,6 +129,7 @@ namespace GreeACLocalServer.Api
 
                     app.MapStaticAssets();
                     app.MapRazorComponents<App>()
+                        .AddInteractiveServerRenderMode()   
                         .AddInteractiveWebAssemblyRenderMode()
                         .AddAdditionalAssemblies(typeof(GreeACLocalServer.UI._Imports).Assembly);
                 }
