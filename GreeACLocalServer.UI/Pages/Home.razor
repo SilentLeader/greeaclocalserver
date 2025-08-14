@@ -44,6 +44,10 @@ else
                             <MudIcon Icon="Icons.Material.Filled.Computer" Size="Size.Small" Class="mr-2" />
                             <MudText Typo="Typo.body2">@device.IpAddress</MudText>
                         </div>
+                        <div class="d-flex align-center mb-1">
+                            <MudIcon Icon="Icons.Material.Filled.Dns" Size="Size.Small" Class="mr-2" />
+                            <MudText Typo="Typo.body2">@device.DNSName</MudText>
+                        </div>
                         <div class="d-flex align-center">
                             <MudIcon Icon="Icons.Material.Filled.Schedule" Size="Size.Small" Class="mr-2" />
                             <MudText Typo="Typo.body2">@device.LastConnectionTimeUtc.ToString("MMM dd, HH:mm")</MudText>

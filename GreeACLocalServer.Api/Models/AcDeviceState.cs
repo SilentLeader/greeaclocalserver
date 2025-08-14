@@ -4,6 +4,7 @@ namespace GreeACLocalServer.Api.Models
     {
         public string MacAddress { get; set; } = string.Empty;
         public string IpAddress { get; set; } = string.Empty;
+        public string DNSName { get; set; } = string.Empty;
         public DateTime LastConnectionTime { get; set; }
     }
 }

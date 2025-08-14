@@ -14,30 +14,35 @@ using GreeACLocalServer.Shared.ValueObjects;
 
 namespace GreeACLocalServer.Api.Services;
 
-public class DeviceManagerService(IOptions<DeviceManagerOptions> options, IHubContext<DeviceHub> hubContext) : IInternalDeviceManagerService
+public class DeviceManagerService(IOptions<DeviceManagerOptions> options, IHubContext<DeviceHub> hubContext, IDnsResolverService dnsResolver) : IInternalDeviceManagerService
 {
     private readonly ConcurrentDictionary<string, AcDeviceState> _deviceStates = new();
     private readonly DeviceManagerOptions _options = options.Value;
     private readonly IHubContext<DeviceHub> _hub = hubContext;
+    private readonly IDnsResolverService _dnsResolver = dnsResolver;
 
-    public void UpdateOrAdd(string macAddress, string ipAddress)
+    public async Task UpdateOrAddAsync(string macAddress, string ipAddress)
     {
+        var dnsName = await _dnsResolver.ResolveDnsNameAsync(ipAddress);
+        
         var state = _deviceStates.AddOrUpdate(macAddress,
             key => new AcDeviceState
             {
                 MacAddress = macAddress,
                 IpAddress = ipAddress,
+                DNSName = dnsName,
                 LastConnectionTime = DateTime.UtcNow
             },
             (key, existing) =>
             {
                 existing.IpAddress = ipAddress;
+                existing.DNSName = dnsName;
                 existing.LastConnectionTime = DateTime.UtcNow;
                 return existing;
             });
 
         // Broadcast upsert
-        var dto = new DeviceDto(state.MacAddress, state.IpAddress, state.LastConnectionTime);
+        var dto = new DeviceDto(state.MacAddress, state.IpAddress, state.DNSName, state.LastConnectionTime);
         _ = _hub.Clients.All.SendAsync(DeviceHubMethods.DeviceUpserted, dto);
     }
 
@@ -65,7 +70,7 @@ public class DeviceManagerService(IOptions<DeviceManagerOptions> options, IHubCo
     public Task<IEnumerable<DeviceDto>> GetAllDeviceStatesAsync(CancellationToken cancellationToken = default)
     {
         RemoveStaleDevices();
-        IEnumerable<DeviceDto> result = _deviceStates.Values.Select(v => new DeviceDto(v.MacAddress, v.IpAddress, v.LastConnectionTime));
+        IEnumerable<DeviceDto> result = _deviceStates.Values.Select(v => new DeviceDto(v.MacAddress, v.IpAddress, v.DNSName, v.LastConnectionTime));
         return Task.FromResult(result);
     }
 
@@ -74,7 +79,7 @@ public class DeviceManagerService(IOptions<DeviceManagerOptions> options, IHubCo
         RemoveStaleDevices();
         if (_deviceStates.TryGetValue(macAddress, out var state))
         {
-            return Task.FromResult<DeviceDto?>(new DeviceDto(state.MacAddress, state.IpAddress, state.LastConnectionTime));
+            return Task.FromResult<DeviceDto?>(new DeviceDto(state.MacAddress, state.IpAddress, state.DNSName, state.LastConnectionTime));
         }
         return Task.FromResult<DeviceDto?>(null);
     }

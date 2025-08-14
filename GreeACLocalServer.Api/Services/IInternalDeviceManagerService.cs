@@ -4,6 +4,6 @@ namespace GreeACLocalServer.Api.Services;
 
 public interface IInternalDeviceManagerService: IDeviceManagerService
 {
-    void UpdateOrAdd(string macAddress, string ipAddress);
+    Task UpdateOrAddAsync(string macAddress, string ipAddress);
     void RemoveStaleDevices();
 }

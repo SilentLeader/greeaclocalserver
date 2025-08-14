@@ -60,7 +60,7 @@ namespace GreeACLocalServer.Api.Services
                 try
                 {
                     var newClient = await server.AcceptTcpClientAsync();
-                    _ = Task.Run(() => HandleClient(newClient));
+                    _ = Task.Run(() => HandleClientAsync(newClient));
                 }
                 catch (ObjectDisposedException)
                 {
@@ -85,7 +85,7 @@ namespace GreeACLocalServer.Api.Services
             }
         }
 
-        private void HandleClient(TcpClient client)
+        private async Task HandleClientAsync(TcpClient client)
         {
             var clientIPAddress = (client.Client.RemoteEndPoint as IPEndPoint)?.Address.ToString();
             using (LogContext.PushProperty("ClientIPAddress", clientIPAddress))
@@ -113,7 +113,7 @@ namespace GreeACLocalServer.Api.Services
 
                         if (!string.IsNullOrEmpty(response.MacAddress))
                         {
-                            _deviceManager.UpdateOrAdd(response.MacAddress, clientIPAddress ?? "");
+                            await _deviceManager.UpdateOrAddAsync(response.MacAddress, clientIPAddress ?? "");
                         }
                     }
 

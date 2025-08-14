@@ -1,3 +1,3 @@
 namespace GreeACLocalServer.Shared.Contracts;
 
-public record DeviceDto(string MacAddress, string IpAddress, DateTime LastConnectionTimeUtc);
+public record DeviceDto(string MacAddress, string IpAddress, string DNSName, DateTime LastConnectionTimeUtc);
