@@ -46,7 +46,7 @@ else
                         <MudDivider Class="mb-2" />
                         <div class="d-flex align-center">
                             <MudIcon Icon="Icons.Material.Filled.Memory" Size="Size.Small" Class="mr-2" />
-                            <MudText Typo="Typo.body2">@device.MacAddress</MudText>
+                            <MudText Typo="Typo.body2">@DeviceHelpers.FormatMacAddress(device.MacAddress)</MudText>
                         </div>
                     </MudCardContent>
                     <MudCardActions>
@@ -54,7 +54,7 @@ else
                                  StartIcon="Icons.Material.Filled.Info" 
                                  Color="Color.Primary" 
                                  Size="Size.Small"
-                                 OnClick="() => ShowDeviceDetails(device)">
+                                 OnClick="() => ShowDeviceDetails(device)" >
                             Details
                         </MudButton>
                     </MudCardActions>
