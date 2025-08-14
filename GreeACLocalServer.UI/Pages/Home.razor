@@ -69,6 +69,7 @@ else
     private string? _error;
     private List<DeviceDto> _devices = new();
     private HubConnection? _hub;
+    private readonly Dictionary<string, DeviceDetailsDialog> _openDialogComponents = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -88,6 +89,7 @@ else
             {
                 _devices = snapshot.ToList();
                 await InvokeAsync(StateHasChanged);
+                await UpdateOpenDialogs();
             });
 
             _hub.On<DeviceDto>(DeviceHubMethods.DeviceUpserted, async dto =>
@@ -102,6 +104,7 @@ else
                     _devices.Add(dto);
                 }
                 await InvokeAsync(StateHasChanged);
+                await UpdateOpenDialog(dto);
             });
 
             _hub.On<string>(DeviceHubMethods.DeviceRemoved, async mac =>
@@ -109,6 +112,7 @@ else
                 _devices.RemoveAll(d => string.Equals(d.MacAddress, mac, StringComparison.OrdinalIgnoreCase));
                 _devices = _devices.ToList();
                 await InvokeAsync(StateHasChanged);
+                CloseDialogForDevice(mac);
             });
 
             await _hub.StartAsync();
@@ -134,7 +138,17 @@ else
     {
         var parameters = new DialogParameters
         {
-            { "Device", device }
+            { "Device", device },
+            { "OnDialogCreated", new Action<DeviceDetailsDialog>(dialog => 
+                {
+                    _openDialogComponents[device.MacAddress] = dialog;
+                })
+            },
+            { "OnDialogClosed", new Action(() => 
+                {
+                    _openDialogComponents.Remove(device.MacAddress);
+                })
+            }
         };
 
         var options = new DialogOptions()
@@ -146,6 +160,32 @@ else
         };
 
         await DialogService.ShowAsync<DeviceDetailsDialog>("Device Details", parameters, options);
+    }
+
+    private async Task UpdateOpenDialogs()
+    {
+        // Update all open dialogs with latest device data
+        foreach (var device in _devices)
+        {
+            await UpdateOpenDialog(device);
+        }
+    }
+
+    private async Task UpdateOpenDialog(DeviceDto updatedDevice)
+    {
+        if (_openDialogComponents.TryGetValue(updatedDevice.MacAddress, out var dialogComponent))
+        {
+            await dialogComponent.UpdateDevice(updatedDevice);
+        }
+    }
+
+    private void CloseDialogForDevice(string macAddress)
+    {
+        if (_openDialogComponents.TryGetValue(macAddress, out var dialogComponent))
+        {
+            dialogComponent.CloseDialog();
+            _openDialogComponents.Remove(macAddress);
+        }
     }
 
     [Inject] private NavigationManager Navigation { get; set; } = default!;

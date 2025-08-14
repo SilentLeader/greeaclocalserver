@@ -38,7 +38,7 @@
                 <MudItem xs="12">
                     <MudText Typo="Typo.subtitle2" Class="mb-1">Last Connection</MudText>
                     <MudText Typo="Typo.body1" Class="mb-1">
-                        @Device.LastConnectionTimeUtc.ToLocalTime().ToString("d")
+                        @Device.LastConnectionTimeUtc.ToLocalTime().ToString("G")
                     </MudText>
                     <MudText Typo="Typo.caption" Color="Color.Secondary">
                         (@GetTimeAgo())
@@ -55,8 +55,26 @@
 @code {
     [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
     [Parameter] public DeviceDto Device { get; set; } = default!;
+    [Parameter] public Action<DeviceDetailsDialog>? OnDialogCreated { get; set; }
+    [Parameter] public Action? OnDialogClosed { get; set; }
 
     private bool IsOnline => Device.LastConnectionTimeUtc > DateTime.UtcNow.AddMinutes(-10);
+
+    protected override void OnInitialized()
+    {
+        OnDialogCreated?.Invoke(this);
+    }
+
+    public async Task UpdateDevice(DeviceDto updatedDevice)
+    {
+        Device = updatedDevice;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void CloseDialog()
+    {
+        MudDialog?.Close();
+    }
 
     private string GetTimeAgo()
     {
@@ -72,5 +90,9 @@
         return "Just now";
     }
 
-    void Cancel() => MudDialog?.Close();
+    void Cancel() 
+    {
+        OnDialogClosed?.Invoke();
+        MudDialog?.Close();
+    }
 }
