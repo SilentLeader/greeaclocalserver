@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <BlazorWebAssemblyEnableDebugging>true</BlazorWebAssemblyEnableDebugging>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="9.0.8" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="9.0.8" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.8" />
+    <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Systemd" Version="9.0.8" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="9.0.8" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="9.0.3" />
+    <PackageReference Include="MudBlazor" Version="8.11.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\GreeACLocalServer.UI\GreeACLocalServer.UI.csproj" />
+    <ProjectReference Include="..\GreeACLocalServer.Shared\GreeACLocalServer.Shared.csproj" />
+  </ItemGroup>
+</Project>

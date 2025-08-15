@@ -1,0 +1,98 @@
+<MudDialog>
+    <DialogContent>
+        <MudContainer Style="max-height: 500px; overflow-y: auto;">
+            <MudGrid>
+                <MudItem xs="12">
+                    <MudText Typo="Typo.h6" GutterBottom="true">Device Information</MudText>
+                    <MudDivider Class="mb-4" />
+                </MudItem>
+                
+                <MudItem xs="12" sm="6">
+                    <MudText Typo="Typo.subtitle2" Class="mb-1">DNS Name</MudText>
+                    <MudText Typo="Typo.body1" Class="mb-3">@Device.DNSName</MudText>
+                </MudItem>
+                
+                <MudItem xs="12" sm="6">
+                    <MudText Typo="Typo.subtitle2" Class="mb-1">IP Address</MudText>
+                    <MudText Typo="Typo.body1" Class="mb-3">@Device.IpAddress</MudText>
+                </MudItem>
+                
+                <MudItem xs="12" sm="6">
+                    <MudText Typo="Typo.subtitle2" Class="mb-1">MAC Address</MudText>
+                    <MudText Typo="Typo.body1" Class="mb-3">@DeviceHelpers.FormatMacAddress(Device.MacAddress)</MudText>
+                </MudItem>
+                
+                <MudItem xs="12" sm="6">
+                    <MudText Typo="Typo.subtitle2" Class="mb-1">Status</MudText>
+                    <div class="d-flex align-center">
+                        <MudIcon Icon="@(IsOnline ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Cancel)" 
+                                Color="@(IsOnline ? Color.Success : Color.Error)" 
+                                Size="Size.Small" 
+                                Class="mr-2" />
+                        <MudText Typo="Typo.body1" Color="@(IsOnline ? Color.Success : Color.Error)">
+                            @(IsOnline ? "Online" : "Offline")
+                        </MudText>
+                    </div>
+                </MudItem>
+                
+                <MudItem xs="12">
+                    <MudText Typo="Typo.subtitle2" Class="mb-1">Last Connection</MudText>
+                    <MudText Typo="Typo.body1" Class="mb-1">
+                        @Device.LastConnectionTimeUtc.ToLocalTime().ToString("G")
+                    </MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        (@GetTimeAgo())
+                    </MudText>
+                </MudItem>
+            </MudGrid>
+        </MudContainer>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public DeviceDto Device { get; set; } = default!;
+    [Parameter] public Action<DeviceDetailsDialog>? OnDialogCreated { get; set; }
+    [Parameter] public Action? OnDialogClosed { get; set; }
+
+    private bool IsOnline => Device.LastConnectionTimeUtc > DateTime.UtcNow.AddMinutes(-10);
+
+    protected override void OnInitialized()
+    {
+        OnDialogCreated?.Invoke(this);
+    }
+
+    public async Task UpdateDevice(DeviceDto updatedDevice)
+    {
+        Device = updatedDevice;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void CloseDialog()
+    {
+        MudDialog?.Close();
+    }
+
+    private string GetTimeAgo()
+    {
+        var timeSpan = DateTime.UtcNow - Device.LastConnectionTimeUtc;
+        
+        if (timeSpan.TotalDays >= 1)
+            return $"{(int)timeSpan.TotalDays} day{((int)timeSpan.TotalDays == 1 ? "" : "s")} ago";
+        if (timeSpan.TotalHours >= 1)
+            return $"{(int)timeSpan.TotalHours} hour{((int)timeSpan.TotalHours == 1 ? "" : "s")} ago";
+        if (timeSpan.TotalMinutes >= 1)
+            return $"{(int)timeSpan.TotalMinutes} minute{((int)timeSpan.TotalMinutes == 1 ? "" : "s")} ago";
+        
+        return "Just now";
+    }
+
+    void Cancel() 
+    {
+        OnDialogClosed?.Invoke();
+        MudDialog?.Close();
+    }
+}

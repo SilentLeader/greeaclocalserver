@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="9.0.8" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="9.0.8" />
+    <PackageReference Include="MudBlazor" Version="8.11.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Reference shared contracts/interfaces -->
+    <ProjectReference Include="../GreeACLocalServer.Shared/GreeACLocalServer.Shared.csproj" />
+  </ItemGroup>
+
+</Project>

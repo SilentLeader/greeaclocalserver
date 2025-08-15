@@ -5,12 +5,31 @@
     "version": "0.2.0",
     "configurations": [        
         {
-            "name": "GreeACLocalServer.Api Debug",
+            "name": "Debug",
+            "type": "blazorwasm",
+            "request": "launch",
+            "hosted": true,
+            "program": "${workspaceFolder}/src/GreeACLocalServer.Api/bin/Debug/net9.0/GreeACLocalServer.Api.dll",
+            "cwd": "${workspaceFolder}/src/GreeACLocalServer.Api",
+            "browser": "chrome",
+            "url": "http://localhost:5100",
+            "env": {
+                "ASPNETCORE_ENVIRONMENT": "Development"
+            },            
+            "dotNetConfig": {
+                "justMyCode": true,
+                "logging": {
+                    "moduleLoad": false
+                }
+            }
+        },
+        {
+            "name": "Debug backend",
             "type": "coreclr",
             "request": "launch",
-            "program": "${workspaceFolder}/GreeACLocalServer.Api/bin/Debug/net9.0/GreeACLocalServer.Api.dll",
+            "program": "${workspaceFolder}/src/GreeACLocalServer.Api/bin/Debug/net9.0/GreeACLocalServer.Api.dll",
             "args": [],
-            "cwd": "${workspaceFolder}/GreeACLocalServer.Api",
+            "cwd": "${workspaceFolder}/src/GreeACLocalServer.Api",
             "env": {
                 "DOTNET_ENVIRONMENT": "Development",
                 "ASPNETCORE_ENVIRONMENT": "Development"
@@ -22,6 +41,43 @@
             "logging": {
                 "moduleLoad": false
             }
+        },
+        {
+            "name": "Watch",
+            "type": "coreclr",
+            "request": "launch",
+            "program": "dotnet",
+            "args": [
+                "watch",
+                "--project",
+                ".",
+                "--verbose"
+            ],
+            "cwd": "${workspaceFolder}/src/GreeACLocalServer.Api",
+            "env": {
+                "ASPNETCORE_ENVIRONMENT": "Development"
+            },
+            "preLaunchTask": "build"
+        },
+        {
+            "name": "Attach",
+            "type": "blazorwasm",
+            "request": "attach",
+            "cwd": "${workspaceFolder}/src/GreeACLocalServer.Api",
+            "browser": "chrome",
+            "url": "http://localhost:5100",
+            "timeout": 30000
+        }
+    ],
+    "compounds": [
+        {
+            "name": "Debug with Hot Reload",
+            "configurations": [ "Watch", "Attach" ]
+        },
+        {
+            "name": "Debug with Build",
+            "configurations": [ "Debug" ],
+            "preLaunchTask": "build",
         }
     ]
 }

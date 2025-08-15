@@ -1,0 +1,200 @@
+﻿@page "/"
+@implements IAsyncDisposable
+@inject IDeviceManagerService DeviceService
+@inject IDialogService DialogService
+@using Microsoft.AspNetCore.SignalR.Client
+
+
+
+<PageTitle>Devices</PageTitle>
+<div>@RendererInfo.Name</div>
+<MudText Typo="Typo.h4" GutterBottom="true">Air Conditioner Devices</MudText>
+
+@if (_loading)
+{
+    <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+    <MudText Typo="Typo.body1" Class="mt-2">Loading devices...</MudText>
+}
+else if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" ContentAlignment="HorizontalAlignment.Center" ShowCloseIcon="false" Class="mb-4">
+        @_error
+    </MudAlert>
+}
+else if (_devices.Count == 0)
+{
+    <MudAlert Severity="Severity.Info" ContentAlignment="HorizontalAlignment.Center" ShowCloseIcon="false">
+        No devices found. Devices will appear here when air conditioners connect to the server.
+    </MudAlert>
+}
+else
+{
+    <MudGrid>
+        @foreach (var device in _devices)
+        {
+            var isOnline = IsDeviceOnline(device);
+            <MudItem xs="12" sm="6" md="4" lg="3" @key="device.MacAddress">
+                <MudCard Elevation="3" Class="mud-height-full">
+                    <MudCardContent>
+                        <div class="d-flex justify-space-between align-center mb-2">
+                            <MudIcon Icon="@Icons.Material.Filled.Air" Color="Color.Primary" Size="Size.Large" />
+                            <MudText Typo="Typo.caption" Color="@(isOnline ? Color.Success : Color.Error)" Class="font-weight-bold">
+                                ● @(isOnline ? "Online" : "Offline")
+                            </MudText>
+                        </div>
+                        <MudText Typo="Typo.h6" Class="mb-1">@device.DNSName</MudText>
+                        <MudDivider Class="mb-2" />
+                        <div class="d-flex align-center">
+                            <MudIcon Icon="@Icons.Material.Filled.Memory" Size="Size.Small" Class="mr-2" />
+                            <MudText Typo="Typo.body2">@DeviceHelpers.FormatMacAddress(device.MacAddress)</MudText>
+                        </div>
+                    </MudCardContent>
+                    <MudCardActions>
+                        <MudButton Variant="Variant.Text" 
+                                 StartIcon="@Icons.Material.Filled.Info" 
+                                 Color="Color.Primary" 
+                                 Size="Size.Small"
+                                 OnClick="() => ShowDeviceDetails(device)" >
+                            Details
+                        </MudButton>
+                    </MudCardActions>
+                </MudCard>
+            </MudItem>
+        }
+    </MudGrid>
+}
+
+@code {
+    private bool _loading = true;
+    private string? _error;
+    private List<DeviceDto> _devices = new();
+    private HubConnection? _hub;
+    private readonly Dictionary<string, DeviceDetailsDialog> _openDialogComponents = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // Initial fetch as fallback
+            var items = await DeviceService.GetAllDeviceStatesAsync();
+            _devices = items.ToList();
+
+            // Build SignalR connection with custom retry policy: start 5s, +5s each time, cap 60s
+            _hub = new HubConnectionBuilder()
+                .WithUrl(Navigation.ToAbsoluteUri("/hubs/devices"))
+                .WithAutomaticReconnect(new LinearBackoffRetryPolicy(5, 5, 60))
+                .Build();
+
+            _hub.On<IEnumerable<DeviceDto>>(DeviceHubMethods.DevicesSnapshot, async snapshot =>
+            {
+                _devices = snapshot.ToList();
+                await InvokeAsync(StateHasChanged);
+                await UpdateOpenDialogs();
+            });
+
+            _hub.On<DeviceDto>(DeviceHubMethods.DeviceUpserted, async dto =>
+            {
+                var idx = _devices.FindIndex(d => string.Equals(d.MacAddress, dto.MacAddress, StringComparison.OrdinalIgnoreCase));
+                if (idx >= 0)
+                {
+                    _devices[idx] = dto;
+                }
+                else
+                {
+                    _devices.Add(dto);
+                }
+                await InvokeAsync(StateHasChanged);
+                await UpdateOpenDialog(dto);
+            });
+
+            _hub.On<string>(DeviceHubMethods.DeviceRemoved, async mac =>
+            {
+                _devices.RemoveAll(d => string.Equals(d.MacAddress, mac, StringComparison.OrdinalIgnoreCase));
+                _devices = _devices.ToList();
+                await InvokeAsync(StateHasChanged);
+                CloseDialogForDevice(mac);
+            });
+
+            await _hub.StartAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private bool IsDeviceOnline(DeviceDto device)
+    {
+        // Device is considered offline if last connection was more than 10 minutes ago
+        var threshold = DateTime.UtcNow.AddMinutes(-10);
+        return device.LastConnectionTimeUtc > threshold;
+    }
+
+    private async Task ShowDeviceDetails(DeviceDto device)
+    {
+        var parameters = new DialogParameters
+        {
+            { "Device", device },
+            { "OnDialogCreated", new Action<DeviceDetailsDialog>(dialog => 
+                {
+                    _openDialogComponents[device.MacAddress] = dialog;
+                })
+            },
+            { "OnDialogClosed", new Action(() => 
+                {
+                    _openDialogComponents.Remove(device.MacAddress);
+                })
+            }
+        };
+
+        var options = new DialogOptions()
+        {
+            MaxWidth = MaxWidth.Medium,
+            FullWidth = true,
+            CloseButton = true,
+            CloseOnEscapeKey = true
+        };
+
+        await DialogService.ShowAsync<DeviceDetailsDialog>("Device Details", parameters, options);
+    }
+
+    private async Task UpdateOpenDialogs()
+    {
+        // Update all open dialogs with latest device data
+        foreach (var device in _devices)
+        {
+            await UpdateOpenDialog(device);
+        }
+    }
+
+    private async Task UpdateOpenDialog(DeviceDto updatedDevice)
+    {
+        if (_openDialogComponents.TryGetValue(updatedDevice.MacAddress, out var dialogComponent))
+        {
+            await dialogComponent.UpdateDevice(updatedDevice);
+        }
+    }
+
+    private void CloseDialogForDevice(string macAddress)
+    {
+        if (_openDialogComponents.TryGetValue(macAddress, out var dialogComponent))
+        {
+            dialogComponent.CloseDialog();
+            _openDialogComponents.Remove(macAddress);
+        }
+    }
+
+    [Inject] private NavigationManager Navigation { get; set; } = default!;
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_hub is not null)
+        {
+            await _hub.DisposeAsync();
+        }
+    }
+}
