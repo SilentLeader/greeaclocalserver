@@ -1,0 +1,204 @@
+name: Publish GreeAC Local Server
+
+# Manual trigger only
+on:
+  workflow_dispatch:
+    inputs:
+      use_manual_version:
+        description: 'Use manual version instead of GitVersion'
+        required: false
+        default: false
+        type: boolean
+      manual_version:
+        description: 'Manual version (only used if use_manual_version is true)'
+        required: false
+        default: ''
+        type: string
+
+jobs:
+  publish:
+    name: Publish Self-Contained Artifacts
+    runs-on: [self-hosted, tethys]
+    
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      semver: ${{ steps.version.outputs.semver }}
+    
+    strategy:
+      matrix:
+        include:
+          - os: linux-x64
+            runtime: linux-x64
+            artifact_name: greeac-localserver-linux-x64
+          - os: win-x64
+            runtime: win-x64
+            artifact_name: greeac-localserver-windows-x64
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # GitVersion needs full git history
+
+    - name: Install GitVersion
+      uses: gittools/actions/gitversion/setup@v1.1.1
+      with:
+        versionSpec: '5.x'
+
+    - name: Determine Version
+      id: gitversion
+      uses: gittools/actions/gitversion/execute@v1.1.1
+      with:
+        useConfigFile: true
+        configFilePath: GitVersion.yml
+
+    - name: Set Version Output
+      id: version
+      run: |
+        if [ "${{ inputs.use_manual_version }}" = "true" ] && [ -n "${{ inputs.manual_version }}" ]; then
+          echo "version=${{ inputs.manual_version }}" >> $GITHUB_OUTPUT
+          echo "semver=${{ inputs.manual_version }}" >> $GITHUB_OUTPUT
+          echo "Using manual version: ${{ inputs.manual_version }}"
+        else
+          echo "version=v${{ steps.gitversion.outputs.semVer }}" >> $GITHUB_OUTPUT
+          echo "semver=${{ steps.gitversion.outputs.semVer }}" >> $GITHUB_OUTPUT
+          echo "Using GitVersion: v${{ steps.gitversion.outputs.semVer }}"
+        fi
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '9.0.x'
+
+    - name: Restore dependencies
+      run: dotnet restore src/GreeACLocalServer.sln
+
+    - name: Build solution
+      run: |
+        dotnet build src/GreeACLocalServer.sln \
+          --configuration Release \
+          --no-restore \
+          -p:Version=${{ steps.gitversion.outputs.assemblySemVer }} \
+          -p:AssemblyVersion=${{ steps.gitversion.outputs.assemblySemVer }} \
+          -p:FileVersion=${{ steps.gitversion.outputs.assemblySemFileVer }} \
+          -p:InformationalVersion=${{ steps.gitversion.outputs.informationalVersion }}
+
+    - name: Run tests
+      run: dotnet test src/GreeACLocalServer.sln --configuration Release --no-build --verbosity normal
+
+    - name: Publish API project (${{ matrix.runtime }})
+      run: |
+        dotnet publish src/GreeACLocalServer.Api/GreeACLocalServer.Api.csproj \
+          --configuration Release \
+          --runtime ${{ matrix.runtime }} \
+          --self-contained true \
+          --output ./publish/${{ matrix.runtime }} \
+          -p:PublishSingleFile=true \
+          -p:PublishTrimmed=true \
+          -p:IncludeNativeLibrariesForSelfExtract=true \
+          -p:Version=${{ steps.gitversion.outputs.assemblySemVer }} \
+          -p:AssemblyVersion=${{ steps.gitversion.outputs.assemblySemVer }} \
+          -p:FileVersion=${{ steps.gitversion.outputs.assemblySemFileVer }} \
+          -p:InformationalVersion=${{ steps.gitversion.outputs.informationalVersion }}
+
+    - name: Create release archive (${{ matrix.runtime }})
+      run: |
+        cd ./publish/${{ matrix.runtime }}
+        if [ "${{ matrix.runtime }}" = "win-x64" ]; then
+          zip -r ../../${{ matrix.artifact_name }}-${{ steps.version.outputs.version }}.zip .
+        else
+          tar -czf ../../${{ matrix.artifact_name }}-${{ steps.version.outputs.version }}.tar.gz .
+        fi
+        cd ../..
+
+    - name: Upload artifacts (${{ matrix.runtime }})
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.artifact_name }}-${{ steps.version.outputs.version }}
+        path: |
+          ${{ matrix.artifact_name }}-${{ steps.version.outputs.version }}.zip
+          ${{ matrix.artifact_name }}-${{ steps.version.outputs.version }}.tar.gz
+        if-no-files-found: ignore
+        retention-days: 30
+
+  create-release:
+    name: Create GitHub Release
+    needs: publish
+    runs-on: [self-hosted, tethys]
+    if: success()
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Install GitVersion
+      uses: gittools/actions/gitversion/setup@v1.1.1
+      with:
+        versionSpec: '5.x'
+
+    - name: Determine Version
+      id: gitversion
+      uses: gittools/actions/gitversion/execute@v1.1.1
+      with:
+        useConfigFile: true
+        configFilePath: GitVersion.yml
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: ./artifacts
+
+    - name: Display downloaded artifacts
+      run: find ./artifacts -type f -name "*"
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ needs.publish.outputs.version }}
+        name: "GreeAC Local Server ${{ needs.publish.outputs.version }}"
+        body: |
+          ## GreeAC Local Server ${{ needs.publish.outputs.version }}
+          
+          ### Version Information
+          - **Version**: ${{ needs.publish.outputs.semver }}
+          - **Build**: ${{ steps.gitversion.outputs.sha }}
+          - **Branch**: ${{ steps.gitversion.outputs.branchName }}
+          - **Commit**: ${{ steps.gitversion.outputs.shortSha }}
+          
+          ### Features
+          - Self-contained builds for Linux and Windows
+          - No .NET runtime dependency required
+          - Optimized with ahead-of-time compilation and trimming
+          
+          ### Downloads
+          - **Linux x64**: `greeac-localserver-linux-x64-${{ needs.publish.outputs.version }}.tar.gz`
+          - **Windows x64**: `greeac-localserver-windows-x64-${{ needs.publish.outputs.version }}.zip`
+          
+          ### Installation
+          
+          #### Linux
+          ```bash
+          tar -xzf greeac-localserver-linux-x64-${{ needs.publish.outputs.version }}.tar.gz
+          chmod +x GreeACLocalServer.Api
+          ./GreeACLocalServer.Api
+          ```
+          
+          #### Windows
+          ```cmd
+          unzip greeac-localserver-windows-x64-${{ needs.publish.outputs.version }}.zip
+          GreeACLocalServer.Api.exe
+          ```
+          
+          ### Configuration
+          Edit `appsettings.json` to configure the server settings before running.
+          
+          ### Changes
+          See commit history for detailed changes in this release.
+        draft: false
+        prerelease: ${{ steps.gitversion.outputs.preReleaseLabel != '' }}
+        files: |
+          ./artifacts/**/*.zip
+          ./artifacts/**/*.tar.gz
+        token: ${{ secrets.GITHUB_TOKEN }}

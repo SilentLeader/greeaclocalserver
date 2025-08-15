@@ -47,6 +47,21 @@ This project provides a **modern, feature-rich local replacement server for GREE
 
 ### **Option 1: Docker (Recommended)**
 
+#### **Quick Start with Docker Compose**
+```bash
+# Clone the repository
+git clone https://github.com/SilentLeader/greeaclocalserver.git
+cd greeaclocalserver
+
+# Edit docker-compose.yml to set your domain and IP
+# Update Server__DomainName and Server__ExternalIp values
+
+# Start the server
+./docker-run.sh
+# or manually: docker-compose up -d
+```
+
+#### **Using Docker Run Command**
 ```bash
 docker run -d \
   --restart=always \
@@ -56,7 +71,17 @@ docker run -d \
   -e Server__EnableUI=true \
   -p 5000:5000 \
   -p 5100:5100 \
-  your-registry/gree-ac-local-server:latest
+  gree-ac-local-server:latest
+```
+
+#### **Building Docker Image Locally**
+```bash
+# Build the image
+./docker-build.sh
+# or manually: docker build -t gree-ac-local-server:latest .
+
+# Run with docker-compose
+docker-compose up -d
 ```
 
 ### **Option 2: Bare Metal**
@@ -76,6 +101,143 @@ git clone https://github.com/yourusername/GreeACLocalServer.git
 cd GreeACLocalServer
 dotnet build src/GreeACLocalServer.sln
 dotnet run --project src/GreeACLocalServer.Api
+```
+
+### **Option 4: System Service Installation**
+
+For production deployments, it's recommended to run the application as a system service.
+
+#### **Linux (systemd)**
+
+1. **Download and extract** the Linux release:
+   ```bash
+   sudo mkdir -p /opt/greeac-localserver
+   sudo tar -xzf greeac-localserver-linux-x64-v*.tar.gz -C /opt/greeac-localserver
+   sudo chmod +x /opt/greeac-localserver/GreeACLocalServer.Api
+   ```
+
+2. **Create dedicated user** for security:
+   ```bash
+   sudo useradd --system --no-create-home --shell /bin/false greeac
+   sudo chown -R greeac:greeac /opt/greeac-localserver
+   ```
+
+3. **Create log directory**:
+   ```bash
+   sudo mkdir -p /var/log/greeac-localserver
+   sudo chown greeac:greeac /var/log/greeac-localserver
+   ```
+
+4. **Install systemd service**:
+   ```bash
+   # Copy the service file (included in the repository)
+   sudo cp systemd/greeac-localserver.service /etc/systemd/system/
+   
+   # Reload systemd and enable the service
+   sudo systemctl daemon-reload
+   sudo systemctl enable greeac-localserver.service
+   ```
+
+5. **Configure the application**:
+   ```bash
+   sudo nano /opt/greeac-localserver/appsettings.json
+   ```
+   Update the Server settings (DomainName, ExternalIp, etc.)
+
+6. **Start the service**:
+   ```bash
+   sudo systemctl start greeac-localserver.service
+   
+   # Check status
+   sudo systemctl status greeac-localserver.service
+   
+   # View logs
+   sudo journalctl -u greeac-localserver.service -f
+   ```
+
+#### **Windows Service**
+
+1. **Download and extract** the Windows release to `C:\Program Files\GreeACLocalServer\`
+
+2. **Configure the application**:
+   - Edit `C:\Program Files\GreeACLocalServer\appsettings.json`
+   - Update Server settings (DomainName, ExternalIp, etc.)
+
+3. **Install as Windows Service** using PowerShell (as Administrator):
+   ```powershell
+   # Navigate to the installation directory
+   cd "C:\Program Files\GreeACLocalServer"
+   
+   # Create the Windows Service
+   sc.exe create "GreeACLocalServer" `
+     binPath= "C:\Program Files\GreeACLocalServer\GreeACLocalServer.Api.exe" `
+     DisplayName= "GreeAC Local Server" `
+     Description= "Local server for GREE air conditioners" `
+     start= auto
+   
+   # Start the service
+   Start-Service -Name "GreeACLocalServer"
+   
+   # Check service status
+   Get-Service -Name "GreeACLocalServer"
+   ```
+
+4. **Alternative: Using .NET hosting bundle** (if available):
+   ```powershell
+   # If you have the .NET hosting bundle, you can also use:
+   dotnet "C:\Program Files\GreeACLocalServer\GreeACLocalServer.Api.dll" `
+     --install-service --service-name "GreeACLocalServer"
+   ```
+
+5. **Service Management**:
+   ```powershell
+   # Stop the service
+   Stop-Service -Name "GreeACLocalServer"
+   
+   # Start the service
+   Start-Service -Name "GreeACLocalServer"
+   
+   # Remove the service (if needed)
+   sc.exe delete "GreeACLocalServer"
+   ```
+
+6. **View logs** in Windows Event Viewer:
+   - Open Event Viewer
+   - Navigate to **Windows Logs** → **Application**
+   - Filter by source "GreeACLocalServer"
+
+#### **Service Configuration Notes**
+
+- **Automatic startup**: Both systemd and Windows services are configured to start automatically on boot
+- **Process monitoring**: Services will automatically restart if the application crashes
+- **Security**: Linux service runs as non-privileged user; Windows service runs as Local System
+- **Logging**: 
+  - Linux: Uses systemd journal (`journalctl -u greeac-localserver.service`)
+  - Windows: Logs to Windows Event Log and application log files
+- **Resource limits**: systemd service includes security and resource restrictions
+
+#### **Port Configuration for Services**
+
+When running as a service, ensure:
+- **Port 5000** (TCP) - GREE device communication (required)
+- **Port 5100** (HTTP) - Web interface (if EnableUI=true)
+
+**Firewall configuration:**
+```bash
+# Linux (ufw)
+sudo ufw allow 5000/tcp
+sudo ufw allow 5100/tcp
+
+# Linux (firewalld)
+sudo firewall-cmd --permanent --add-port=5000/tcp
+sudo firewall-cmd --permanent --add-port=5100/tcp
+sudo firewall-cmd --reload
+```
+
+```powershell
+# Windows PowerShell (as Administrator)
+New-NetFirewallRule -DisplayName "GreeAC Server TCP" -Direction Inbound -Protocol TCP -LocalPort 5000
+New-NetFirewallRule -DisplayName "GreeAC Server Web" -Direction Inbound -Protocol TCP -LocalPort 5100
 ```
 
 ## ⚙️ **Configuration**
@@ -198,6 +360,72 @@ Access the web interface at: `http://your-server-ip:5100`
 - **Fallback Behavior** - Application shows IP addresses when DNS fails
 - **DNS Server** - Verify your DNS server is accessible
 - **Network Configuration** - Check server's DNS settings
+
+### **Service Issues**
+
+#### **Linux (systemd)**
+```bash
+# Check service status
+sudo systemctl status greeac-localserver.service
+
+# View recent logs
+sudo journalctl -u greeac-localserver.service -n 50
+
+# Follow logs in real-time
+sudo journalctl -u greeac-localserver.service -f
+
+# Restart service
+sudo systemctl restart greeac-localserver.service
+
+# Check if service is enabled for auto-start
+sudo systemctl is-enabled greeac-localserver.service
+
+# Service configuration file location
+sudo nano /etc/systemd/system/greeac-localserver.service
+```
+
+#### **Windows Service**
+```powershell
+# Check service status
+Get-Service -Name "GreeACLocalServer"
+
+# Start/Stop/Restart service
+Start-Service -Name "GreeACLocalServer"
+Stop-Service -Name "GreeACLocalServer"
+Restart-Service -Name "GreeACLocalServer"
+
+# View Event Logs
+Get-EventLog -LogName Application -Source "GreeACLocalServer" -Newest 20
+
+# Check service configuration
+Get-WmiObject -Class Win32_Service -Filter "Name='GreeACLocalServer'"
+```
+
+### **Common Service Problems**
+
+1. **Service fails to start**:
+   - Check configuration file syntax (JSON)
+   - Verify file permissions
+   - Check if ports are already in use: `netstat -tulpn | grep :5000`
+   - Review error logs
+
+2. **Service stops unexpectedly**:
+   - Check system resources (memory, disk space)
+   - Review application logs for errors
+   - Verify .NET runtime is installed and compatible
+
+3. **Permission denied errors**:
+   - Ensure service user has read access to application files
+   - Check log directory permissions
+   - Verify network interface binding permissions
+
+### **Performance Tuning**
+
+For high-traffic scenarios, consider:
+- **Increase file descriptor limits** (Linux)
+- **Adjust timeout values** in configuration
+- **Monitor memory usage** and adjust limits
+- **Use dedicated network interface** if available
 
 ## 🧪 **Development**
 

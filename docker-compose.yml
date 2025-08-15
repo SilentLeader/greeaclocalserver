@@ -1,0 +1,35 @@
+services:
+  gree-ac-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gree-ac-local-server
+    restart: unless-stopped
+    ports:
+      - "5000:5000"  # TCP port for GREE devices
+      - "5100:5100"  # Web UI port
+    environment:
+      # Server Configuration
+      - ASPNETCORE_ENVIRONMENT=Production
+      - Server__Port=5000
+      - Server__DomainName=gree.example.com     # Change to your domain
+      - Server__ExternalIp=192.168.1.100        # Change to your server IP
+      - Server__EnableUI=true
+      - Server__CryptoKey=a3K8Bx%2r8Y7#xDh
+      
+      # Device Manager Configuration  
+      - DeviceManager__DeviceTimeoutMinutes=60
+      
+      # Logging Configuration
+      - Serilog__MinimumLevel=Information
+      
+    volumes:
+      # Mount logs directory only (create it if it doesn't exist)
+      - ./logs:/app/logs
+      
+    networks:
+      - gree-network
+
+networks:
+  gree-network:
+    driver: bridge

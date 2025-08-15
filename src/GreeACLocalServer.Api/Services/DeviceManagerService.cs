@@ -14,73 +14,36 @@ using GreeACLocalServer.Shared.ValueObjects;
 
 namespace GreeACLocalServer.Api.Services;
 
-public class DeviceManagerService(IOptions<DeviceManagerOptions> options, IHubContext<DeviceHub> hubContext, IDnsResolverService dnsResolver) : IInternalDeviceManagerService
+/// <summary>
+/// Device manager service with SignalR support for UI notifications.
+/// Inherits core functionality from HeadlessDeviceManagerService and adds real-time updates.
+/// </summary>
+public class DeviceManagerService(IOptions<DeviceManagerOptions> options, IHubContext<DeviceHub> hubContext, IDnsResolverService dnsResolver) 
+    : HeadlessDeviceManagerService(options, dnsResolver)
 {
-    private readonly ConcurrentDictionary<string, AcDeviceState> _deviceStates = new();
-    private readonly DeviceManagerOptions _options = options.Value;
     private readonly IHubContext<DeviceHub> _hub = hubContext;
-    private readonly IDnsResolverService _dnsResolver = dnsResolver;
 
-    public async Task UpdateOrAddAsync(string macAddress, string ipAddress)
+    /// <summary>
+    /// Called when a device is updated or added. Sends SignalR notification to all connected clients.
+    /// </summary>
+    /// <param name="deviceState">The updated device state</param>
+    protected override async Task OnDeviceUpdatedAsync(AcDeviceState deviceState)
     {
-        var dnsName = await _dnsResolver.ResolveDnsNameAsync(ipAddress);
+        // Send SignalR notification for device upsert
+        var dto = new DeviceDto(deviceState.MacAddress, deviceState.IpAddress, deviceState.DNSName, deviceState.LastConnectionTime);
+        await _hub.Clients.All.SendAsync(DeviceHubMethods.DeviceUpserted, dto);
+    }
+
+    /// <summary>
+    /// Called when devices are removed due to timeout. Sends SignalR notifications for each removed device.
+    /// </summary>
+    /// <param name="removedMacAddresses">List of MAC addresses that were removed</param>
+    protected override async Task OnDevicesRemovedAsync(List<string> removedMacAddresses)
+    {
+        // Send SignalR notifications for device removals
+        var tasks = removedMacAddresses.Select(mac => 
+            _hub.Clients.All.SendAsync(DeviceHubMethods.DeviceRemoved, mac));
         
-        var state = _deviceStates.AddOrUpdate(macAddress,
-            key => new AcDeviceState
-            {
-                MacAddress = macAddress,
-                IpAddress = ipAddress,
-                DNSName = dnsName,
-                LastConnectionTime = DateTime.UtcNow
-            },
-            (key, existing) =>
-            {
-                existing.IpAddress = ipAddress;
-                existing.DNSName = dnsName;
-                existing.LastConnectionTime = DateTime.UtcNow;
-                return existing;
-            });
-
-        // Broadcast upsert
-        var dto = new DeviceDto(state.MacAddress, state.IpAddress, state.DNSName, state.LastConnectionTime);
-        _ = _hub.Clients.All.SendAsync(DeviceHubMethods.DeviceUpserted, dto);
-    }
-
-    public void RemoveStaleDevices()
-    {
-        var threshold = DateTime.UtcNow.AddMinutes(-_options.DeviceTimeoutMinutes);
-        var removed = new List<string>();
-        foreach (var kvp in _deviceStates)
-        {
-            if (kvp.Value.LastConnectionTime < threshold)
-            {
-                if (_deviceStates.TryRemove(kvp.Key, out _))
-                {
-                    removed.Add(kvp.Key);
-                }
-            }
-        }
-
-        foreach (var mac in removed)
-        {
-            _ = _hub.Clients.All.SendAsync(DeviceHubMethods.DeviceRemoved, mac);
-        }
-    }
-
-    public Task<IEnumerable<DeviceDto>> GetAllDeviceStatesAsync(CancellationToken cancellationToken = default)
-    {
-        RemoveStaleDevices();
-        IEnumerable<DeviceDto> result = _deviceStates.Values.Select(v => new DeviceDto(v.MacAddress, v.IpAddress, v.DNSName, v.LastConnectionTime));
-        return Task.FromResult(result);
-    }
-
-    public Task<DeviceDto?> GetAsync(string macAddress, CancellationToken cancellationToken = default)
-    {
-        RemoveStaleDevices();
-        if (_deviceStates.TryGetValue(macAddress, out var state))
-        {
-            return Task.FromResult<DeviceDto?>(new DeviceDto(state.MacAddress, state.IpAddress, state.DNSName, state.LastConnectionTime));
-        }
-        return Task.FromResult<DeviceDto?>(null);
+        await Task.WhenAll(tasks);
     }
 }
