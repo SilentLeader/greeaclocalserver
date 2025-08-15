@@ -93,9 +93,7 @@ jobs:
           --runtime ${{ matrix.runtime }} \
           --self-contained true \
           --output ./publish/${{ matrix.runtime }} \
-          -p:PublishSingleFile=true \
           -p:PublishTrimmed=true \
-          -p:IncludeNativeLibrariesForSelfExtract=true \
           -p:Version=${{ steps.gitversion.outputs.assemblySemVer }} \
           -p:AssemblyVersion=${{ steps.gitversion.outputs.assemblySemVer }} \
           -p:FileVersion=${{ steps.gitversion.outputs.assemblySemFileVer }} \
