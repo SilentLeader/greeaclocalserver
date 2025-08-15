@@ -18,7 +18,7 @@ on:
 jobs:
   publish:
     name: Publish Self-Contained Artifacts
-    runs-on: [self-hosted, tethys]
+    runs-on: ubuntu-latest
     
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -124,7 +124,7 @@ jobs:
   create-release:
     name: Create GitHub Release
     needs: publish
-    runs-on: [self-hosted, tethys]
+    runs-on: ubuntu-latest
     if: success()
     
     steps:
