@@ -15,6 +15,10 @@ on:
         default: ''
         type: string
 
+permissions:
+  contents: write  # Required for creating releases and uploading assets
+  actions: read    # Required for downloading artifacts
+
 jobs:
   publish:
     name: Publish Self-Contained Artifacts
@@ -167,7 +171,7 @@ jobs:
           ### Features
           - Self-contained builds for Linux and Windows
           - No .NET runtime dependency required
-          - Optimized with ahead-of-time compilation and trimming
+          - Optimized deployments for production use
           
           ### Downloads
           - **Linux x64**: `greeac-localserver-linux-x64-${{ needs.publish.outputs.version }}.tar.gz`
@@ -195,7 +199,9 @@ jobs:
           See commit history for detailed changes in this release.
         draft: false
         prerelease: ${{ steps.gitversion.outputs.preReleaseLabel != '' }}
+        make_latest: true
+        generate_release_notes: true
         files: |
           ./artifacts/**/*.zip
           ./artifacts/**/*.tar.gz
-        token: ${{ secrets.GITHUB_TOKEN }}
+        token: ${{ secrets.RELEASE_TOKEN }}
