@@ -9,8 +9,8 @@
             "type": "blazorwasm",
             "request": "launch",
             "hosted": true,
-            "program": "${workspaceFolder}/GreeACLocalServer.Api/bin/Debug/net9.0/GreeACLocalServer.Api.dll",
-            "cwd": "${workspaceFolder}/GreeACLocalServer.Api",
+            "program": "${workspaceFolder}/src/GreeACLocalServer.Api/bin/Debug/net9.0/GreeACLocalServer.Api.dll",
+            "cwd": "${workspaceFolder}/src/GreeACLocalServer.Api",
             "browser": "chrome",
             "url": "http://localhost:5100",
             "env": {
@@ -27,9 +27,9 @@
             "name": "Debug backend",
             "type": "coreclr",
             "request": "launch",
-            "program": "${workspaceFolder}/GreeACLocalServer.Api/bin/Debug/net9.0/GreeACLocalServer.Api.dll",
+            "program": "${workspaceFolder}/src/GreeACLocalServer.Api/bin/Debug/net9.0/GreeACLocalServer.Api.dll",
             "args": [],
-            "cwd": "${workspaceFolder}/GreeACLocalServer.Api",
+            "cwd": "${workspaceFolder}/src/GreeACLocalServer.Api",
             "env": {
                 "DOTNET_ENVIRONMENT": "Development",
                 "ASPNETCORE_ENVIRONMENT": "Development"
@@ -53,7 +53,7 @@
                 ".",
                 "--verbose"
             ],
-            "cwd": "${workspaceFolder}/GreeACLocalServer.Api",
+            "cwd": "${workspaceFolder}/src/GreeACLocalServer.Api",
             "env": {
                 "ASPNETCORE_ENVIRONMENT": "Development"
             },
@@ -63,7 +63,7 @@
             "name": "Attach",
             "type": "blazorwasm",
             "request": "attach",
-            "cwd": "${workspaceFolder}/GreeACLocalServer.Api",
+            "cwd": "${workspaceFolder}/src/GreeACLocalServer.Api",
             "browser": "chrome",
             "url": "http://localhost:5100",
             "timeout": 30000

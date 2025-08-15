@@ -37,7 +37,7 @@ else
                 <MudCard Elevation="3" Class="mud-height-full">
                     <MudCardContent>
                         <div class="d-flex justify-space-between align-center mb-2">
-                            <MudIcon Icon="Icons.Material.Filled.Air" Color="Color.Primary" Size="Size.Large" />
+                            <MudIcon Icon="@Icons.Material.Filled.Air" Color="Color.Primary" Size="Size.Large" />
                             <MudText Typo="Typo.caption" Color="@(isOnline ? Color.Success : Color.Error)" Class="font-weight-bold">
                                 ● @(isOnline ? "Online" : "Offline")
                             </MudText>
@@ -45,13 +45,13 @@ else
                         <MudText Typo="Typo.h6" Class="mb-1">@device.DNSName</MudText>
                         <MudDivider Class="mb-2" />
                         <div class="d-flex align-center">
-                            <MudIcon Icon="Icons.Material.Filled.Memory" Size="Size.Small" Class="mr-2" />
+                            <MudIcon Icon="@Icons.Material.Filled.Memory" Size="Size.Small" Class="mr-2" />
                             <MudText Typo="Typo.body2">@DeviceHelpers.FormatMacAddress(device.MacAddress)</MudText>
                         </div>
                     </MudCardContent>
                     <MudCardActions>
                         <MudButton Variant="Variant.Text" 
-                                 StartIcon="Icons.Material.Filled.Info" 
+                                 StartIcon="@Icons.Material.Filled.Info" 
                                  Color="Color.Primary" 
                                  Size="Size.Small"
                                  OnClick="() => ShowDeviceDetails(device)" >

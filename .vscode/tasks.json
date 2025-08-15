@@ -4,7 +4,7 @@
 		{
 			"type": "shell",
 			"label": "build",
-			"command": "dotnet build GreeACLocalServer.Api/GreeACLocalServer.Api.csproj",
+			"command": "dotnet build src/GreeACLocalServer.Api/GreeACLocalServer.Api.csproj",
 			"group": "build",
 			"problemMatcher": [
 				"$msCompile"
