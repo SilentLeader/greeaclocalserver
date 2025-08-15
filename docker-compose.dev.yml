@@ -1,0 +1,40 @@
+services:
+  gree-ac-server-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: build  # Stop at build stage for development
+    container_name: gree-ac-local-server-dev
+    restart: unless-stopped
+    ports:
+      - "5000:5000"  # TCP port for GREE devices
+      - "5100:5100"  # Web UI port
+      - "5101:5101"  # Additional port for debugging
+    environment:
+      # Development Configuration
+      - ASPNETCORE_ENVIRONMENT=Development
+      - DOTNET_ENVIRONMENT=Development
+      - Server__Port=5000
+      - Server__DomainName=gree.dev.local
+      - Server__ExternalIp=127.0.0.1
+      - Server__EnableUI=true
+      - Server__CryptoKey=a3K8Bx%2r8Y7#xDh
+      
+      # Development specific
+      - DOTNET_USE_POLLING_FILE_WATCHER=true
+      - DOTNET_RUNNING_IN_CONTAINER=true
+      
+    volumes:
+      # Mount source code for hot reload (adjust paths as needed)
+      - ./src:/src
+      - ./appsettings.Development.json:/app/appsettings.Development.json:ro
+      
+    working_dir: /src
+    command: ["dotnet", "watch", "--project", "GreeACLocalServer.Api", "--verbose"]
+    
+    networks:
+      - gree-dev-network
+
+networks:
+  gree-dev-network:
+    driver: bridge

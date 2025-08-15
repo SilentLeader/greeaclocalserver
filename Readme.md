@@ -47,6 +47,21 @@ This project provides a **modern, feature-rich local replacement server for GREE
 
 ### **Option 1: Docker (Recommended)**
 
+#### **Quick Start with Docker Compose**
+```bash
+# Clone the repository
+git clone https://github.com/SilentLeader/greeaclocalserver.git
+cd greeaclocalserver
+
+# Edit docker-compose.yml to set your domain and IP
+# Update Server__DomainName and Server__ExternalIp values
+
+# Start the server
+./docker-run.sh
+# or manually: docker-compose up -d
+```
+
+#### **Using Docker Run Command**
 ```bash
 docker run -d \
   --restart=always \
@@ -56,7 +71,17 @@ docker run -d \
   -e Server__EnableUI=true \
   -p 5000:5000 \
   -p 5100:5100 \
-  your-registry/gree-ac-local-server:latest
+  gree-ac-local-server:latest
+```
+
+#### **Building Docker Image Locally**
+```bash
+# Build the image
+./docker-build.sh
+# or manually: docker build -t gree-ac-local-server:latest .
+
+# Run with docker-compose
+docker-compose up -d
 ```
 
 ### **Option 2: Bare Metal**

@@ -1,0 +1,52 @@
+# .dockerignore
+
+# Exclude source control
+.git
+.gitignore
+
+# Exclude build artifacts
+**/bin/
+**/obj/
+**/out/
+
+# Exclude IDE files
+.vs/
+.vscode/
+*.user
+*.suo
+
+# Exclude documentation
+*.md
+LICENSE
+
+# Exclude test projects and files
+**/*Test*/
+**/*Tests*/
+**/TestResults/
+
+# Exclude temporary files
+**/temp/
+**/tmp/
+**/.tmp/
+
+# Exclude logs
+**/logs/
+**/*.log
+
+# Exclude OS files
+.DS_Store
+Thumbs.db
+
+# Exclude Docker files from being copied (except the ones we need)
+Dockerfile*
+docker-compose*
+
+# Exclude node modules (if any)
+**/node_modules/
+
+# Exclude package files
+**/packages/
+**/packages.lock.json
+
+# Exclude publish output
+**/publish/
