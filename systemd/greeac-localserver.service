@@ -1,0 +1,36 @@
+[Unit]
+Description=GreeAC Local Server
+Documentation=https://github.com/SilentLeader/greeaclocalserver
+After=network.target
+Wants=network.target
+
+[Service]
+Type=notify
+User=greeac
+Group=greeac
+WorkingDirectory=/opt/greeac-localserver
+ExecStart=/opt/greeac-localserver/GreeACLocalServer.Api
+Restart=always
+RestartSec=10
+TimeoutStopSec=30
+KillMode=process
+SyslogIdentifier=greeac-localserver
+
+# Security settings
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/opt/greeac-localserver/logs
+ReadWritePaths=/var/log/greeac-localserver
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+
+# Environment variables
+Environment=DOTNET_ENVIRONMENT=Production
+Environment=ASPNETCORE_ENVIRONMENT=Production
+
+[Install]
+WantedBy=multi-user.target
