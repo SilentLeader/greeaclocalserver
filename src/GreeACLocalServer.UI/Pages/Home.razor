@@ -76,10 +76,8 @@ else
         try
         {
             // Initial fetch as fallback
-            Console.WriteLine("Starting device fetch...");
             var items = await DeviceService.GetAllDeviceStatesAsync();
             _devices = items.ToList();
-            Console.WriteLine($"Fetched {_devices.Count} devices successfully");
 
             // Initialize SignalR connection
             await InitializeSignalRConnection();
@@ -110,15 +108,13 @@ else
         try
         {
             var hubUrl = Navigation.ToAbsoluteUri("/hubs/devices");
-            Console.WriteLine($"SignalR Hub URL: {hubUrl}");
-            Console.WriteLine($"Base URI: {Navigation.BaseUri}");
 
             // Build SignalR connection with custom retry policy: start 5s, +5s each time, cap 60s
             _hub = new HubConnectionBuilder()
                 .WithUrl(hubUrl, options =>
                 {
-                    // Log transport for debugging
-                    Console.WriteLine($"SignalR transport options configured for URL: {hubUrl}");
+                    // Configure connection timeouts
+                    options.CloseTimeout = TimeSpan.FromSeconds(30);
                 })
                 .WithAutomaticReconnect(new LinearBackoffRetryPolicy(5, 5, 60))
                 .Build();
@@ -127,11 +123,8 @@ else
             SetupSignalREventHandlers();
 
             // Start connection with timeout
-            Console.WriteLine("Starting SignalR connection...");
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
             await _hub.StartAsync(cts.Token);
-            
-            Console.WriteLine("SignalR connection established successfully");
         }
         catch (Exception ex)
         {
