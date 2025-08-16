@@ -76,55 +76,103 @@ else
         try
         {
             // Initial fetch as fallback
+            Console.WriteLine("Starting device fetch...");
             var items = await DeviceService.GetAllDeviceStatesAsync();
             _devices = items.ToList();
+            Console.WriteLine($"Fetched {_devices.Count} devices successfully");
 
-            // Build SignalR connection with custom retry policy: start 5s, +5s each time, cap 60s
-            _hub = new HubConnectionBuilder()
-                .WithUrl(Navigation.ToAbsoluteUri("/hubs/devices"))
-                .WithAutomaticReconnect(new LinearBackoffRetryPolicy(5, 5, 60))
-                .Build();
-
-            _hub.On<IEnumerable<DeviceDto>>(DeviceHubMethods.DevicesSnapshot, async snapshot =>
-            {
-                _devices = snapshot.ToList();
-                await InvokeAsync(StateHasChanged);
-                await UpdateOpenDialogs();
-            });
-
-            _hub.On<DeviceDto>(DeviceHubMethods.DeviceUpserted, async dto =>
-            {
-                var idx = _devices.FindIndex(d => string.Equals(d.MacAddress, dto.MacAddress, StringComparison.OrdinalIgnoreCase));
-                if (idx >= 0)
-                {
-                    _devices[idx] = dto;
-                }
-                else
-                {
-                    _devices.Add(dto);
-                }
-                await InvokeAsync(StateHasChanged);
-                await UpdateOpenDialog(dto);
-            });
-
-            _hub.On<string>(DeviceHubMethods.DeviceRemoved, async mac =>
-            {
-                _devices.RemoveAll(d => string.Equals(d.MacAddress, mac, StringComparison.OrdinalIgnoreCase));
-                _devices = _devices.ToList();
-                await InvokeAsync(StateHasChanged);
-                CloseDialogForDevice(mac);
-            });
-
-            await _hub.StartAsync();
+            // Initialize SignalR connection
+            await InitializeSignalRConnection();
+        }
+        catch (HttpRequestException ex) when (ex.Message.Contains("SSL"))
+        {
+            _error = $"SSL connection failed: {ex.Message}. This might be a configuration issue with HTTPS.";
+            Console.WriteLine($"SSL Error: {ex}");
+        }
+        catch (TaskCanceledException ex)
+        {
+            _error = $"Connection timed out: {ex.Message}";
+            Console.WriteLine($"Timeout Error: {ex}");
         }
         catch (Exception ex)
         {
-            _error = ex.Message;
+            _error = $"Failed to load devices: {ex.Message}";
+            Console.WriteLine($"General Error: {ex}");
         }
         finally
         {
             _loading = false;
         }
+    }
+
+    private async Task InitializeSignalRConnection()
+    {
+        try
+        {
+            var hubUrl = Navigation.ToAbsoluteUri("/hubs/devices");
+            Console.WriteLine($"SignalR Hub URL: {hubUrl}");
+            Console.WriteLine($"Base URI: {Navigation.BaseUri}");
+
+            // Build SignalR connection with custom retry policy: start 5s, +5s each time, cap 60s
+            _hub = new HubConnectionBuilder()
+                .WithUrl(hubUrl, options =>
+                {
+                    // Log transport for debugging
+                    Console.WriteLine($"SignalR transport options configured for URL: {hubUrl}");
+                })
+                .WithAutomaticReconnect(new LinearBackoffRetryPolicy(5, 5, 60))
+                .Build();
+
+            // Set up event handlers
+            SetupSignalREventHandlers();
+
+            // Start connection with timeout
+            Console.WriteLine("Starting SignalR connection...");
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            await _hub.StartAsync(cts.Token);
+            
+            Console.WriteLine("SignalR connection established successfully");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"SignalR connection failed: {ex}");
+            throw new Exception($"SignalR connection failed: {ex.Message}");
+        }
+    }
+
+    private void SetupSignalREventHandlers()
+    {
+        if (_hub is null) return;
+
+        _hub.On<IEnumerable<DeviceDto>>(DeviceHubMethods.DevicesSnapshot, async snapshot =>
+        {
+            _devices = snapshot.ToList();
+            await InvokeAsync(StateHasChanged);
+            await UpdateOpenDialogs();
+        });
+
+        _hub.On<DeviceDto>(DeviceHubMethods.DeviceUpserted, async dto =>
+        {
+            var idx = _devices.FindIndex(d => string.Equals(d.MacAddress, dto.MacAddress, StringComparison.OrdinalIgnoreCase));
+            if (idx >= 0)
+            {
+                _devices[idx] = dto;
+            }
+            else
+            {
+                _devices.Add(dto);
+            }
+            await InvokeAsync(StateHasChanged);
+            await UpdateOpenDialog(dto);
+        });
+
+        _hub.On<string>(DeviceHubMethods.DeviceRemoved, async mac =>
+        {
+            _devices.RemoveAll(d => string.Equals(d.MacAddress, mac, StringComparison.OrdinalIgnoreCase));
+            _devices = _devices.ToList();
+            await InvokeAsync(StateHasChanged);
+            CloseDialogForDevice(mac);
+        });
     }
 
     private bool IsDeviceOnline(DeviceDto device)
