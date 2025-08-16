@@ -17,6 +17,7 @@ using GreeACLocalServer.Shared.Contracts;
 using GreeACLocalServer.Shared.Interfaces;
 using GreeACLocalServer.Api.Hubs;
 using MudBlazor.Services;
+using Microsoft.AspNetCore.HttpOverrides;
 
 namespace GreeACLocalServer.Api
 {
@@ -27,6 +28,7 @@ namespace GreeACLocalServer.Api
             Log.Logger = new LoggerConfiguration()
                 .ReadFrom.Configuration(new ConfigurationBuilder()
                     .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
+                    .AddJsonFile("/etc/greeac-localserver/appsettings.json", optional: true, reloadOnChange: true)
                     .AddJsonFile("appsettings.dev.json", optional: true, reloadOnChange: true)
                     .AddEnvironmentVariables()
                     .Build())
@@ -37,6 +39,7 @@ namespace GreeACLocalServer.Api
                 // Read EnableUI setting early to decide which builder to use
                 var tempConfig = new ConfigurationBuilder()
                     .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
+                    .AddJsonFile("/etc/greeac-localserver/appsettings.json", optional: true, reloadOnChange: true)
                     .AddJsonFile("appsettings.dev.json", optional: true, reloadOnChange: true)
                     .AddEnvironmentVariables()
                     .Build();
@@ -74,6 +77,7 @@ namespace GreeACLocalServer.Api
             
             // Configure additional configuration sources
             builder.Configuration.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
+            builder.Configuration.AddJsonFile("/etc/greeac-localserver/appsettings.json", optional: true, reloadOnChange: true);
             builder.Configuration.AddJsonFile("appsettings.dev.json", optional: true, reloadOnChange: true);
 
             // Configure common services
@@ -95,6 +99,7 @@ namespace GreeACLocalServer.Api
                 .ConfigureAppConfiguration((context, config) =>
                 {
                     config.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
+                    config.AddJsonFile("/etc/greeac-localserver/appsettings.json", optional: true, reloadOnChange: true);
                     config.AddJsonFile("appsettings.dev.json", optional: true, reloadOnChange: true);
                 })
                 .ConfigureServices((context, services) =>
@@ -202,6 +207,10 @@ namespace GreeACLocalServer.Api
             {
                 app.UseResponseCompression();
                 app.UseHsts();
+                app.UseForwardedHeaders(new ForwardedHeadersOptions
+                {
+                    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+                });
                 app.UseHttpsRedirection();
             }
 
