@@ -17,6 +17,7 @@ using GreeACLocalServer.Shared.Contracts;
 using GreeACLocalServer.Shared.Interfaces;
 using GreeACLocalServer.Api.Hubs;
 using MudBlazor.Services;
+using Microsoft.AspNetCore.HttpOverrides;
 
 namespace GreeACLocalServer.Api
 {
@@ -24,24 +25,18 @@ namespace GreeACLocalServer.Api
     {
         static async Task Main(string[] args)
         {
+            var configBuilder = new ConfigurationBuilder();
+            SetupConfig(configBuilder);
+            var config = configBuilder.Build();
+
             Log.Logger = new LoggerConfiguration()
-                .ReadFrom.Configuration(new ConfigurationBuilder()
-                    .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
-                    .AddJsonFile("appsettings.dev.json", optional: true, reloadOnChange: true)
-                    .AddEnvironmentVariables()
-                    .Build())
+                .ReadFrom.Configuration(config)
                 .CreateLogger();
 
             try
             {
                 // Read EnableUI setting early to decide which builder to use
-                var tempConfig = new ConfigurationBuilder()
-                    .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
-                    .AddJsonFile("appsettings.dev.json", optional: true, reloadOnChange: true)
-                    .AddEnvironmentVariables()
-                    .Build();
-
-                var serverOptions = tempConfig.GetSection("Server").Get<ServerOptions>()!;
+                var serverOptions = config.GetSection("Server").Get<ServerOptions>()!;
 
                 if (serverOptions.EnableUI)
                 {
@@ -64,17 +59,30 @@ namespace GreeACLocalServer.Api
             }
         }
 
+        private static void SetupConfig(IConfigurationBuilder configBuilder)
+        {
+            configBuilder.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
+
+            if (OperatingSystem.IsLinux())
+            {
+                configBuilder.AddJsonFile("/etc/greeac-localserver/appsettings.json", optional: true, reloadOnChange: true);
+            }
+    
+            configBuilder.AddJsonFile("appsettings.dev.json", optional: true, reloadOnChange: true)
+                    .AddEnvironmentVariables();
+        }
+
         private static async Task RunWithWebApplicationAsync(string[] args)
         {
             var builder = WebApplication.CreateBuilder(args);
             builder.Host.UseSerilog();
-            
+
             // Configure OS-specific hosting
             ConfigureOSSpecificHosting(builder.Host);
-            
+
+
             // Configure additional configuration sources
-            builder.Configuration.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
-            builder.Configuration.AddJsonFile("appsettings.dev.json", optional: true, reloadOnChange: true);
+            SetupConfig(builder.Configuration);
 
             // Configure common services
             ConfigureCommonServicesWithUI(builder.Services, builder.Configuration);
@@ -94,8 +102,7 @@ namespace GreeACLocalServer.Api
                 .UseSerilog()
                 .ConfigureAppConfiguration((context, config) =>
                 {
-                    config.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
-                    config.AddJsonFile("appsettings.dev.json", optional: true, reloadOnChange: true);
+                    SetupConfig(config);
                 })
                 .ConfigureServices((context, services) =>
                 {
@@ -202,6 +209,10 @@ namespace GreeACLocalServer.Api
             {
                 app.UseResponseCompression();
                 app.UseHsts();
+                app.UseForwardedHeaders(new ForwardedHeadersOptions
+                {
+                    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+                });
                 app.UseHttpsRedirection();
             }
 

@@ -7,6 +7,19 @@
   <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
     <BlazorWebAssemblyEnableDebugging>true</BlazorWebAssemblyEnableDebugging>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <!-- Disable source maps in production -->
+    <BlazorWebAssemblyEmitSourceMap>false</BlazorWebAssemblyEmitSourceMap>
+    
+    <!-- Additional production optimizations -->
+    <BlazorWebAssemblyLoadAllGlobalizationData>false</BlazorWebAssemblyLoadAllGlobalizationData>
+    <BlazorEnableTimeZoneSupport>false</BlazorEnableTimeZoneSupport>
+    <BlazorWebAssemblyPreserveCollationData>false</BlazorWebAssemblyPreserveCollationData>
+    
+    <!-- Optimize runtime -->
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <TrimMode>partial</TrimMode>
+  </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="9.0.8" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="9.0.8" />
