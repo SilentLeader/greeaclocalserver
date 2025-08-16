@@ -18,6 +18,7 @@ using GreeACLocalServer.Shared.Interfaces;
 using GreeACLocalServer.Api.Hubs;
 using MudBlazor.Services;
 using Microsoft.AspNetCore.HttpOverrides;
+using System.Net;
 
 namespace GreeACLocalServer.Api
 {
@@ -142,6 +143,13 @@ namespace GreeACLocalServer.Api
             
             // Background services
             services.AddHostedService<SocketHandlerBackgroundService>();
+
+            // Configure forwarded headers from appsettings
+            var forwardedHeadersConfig = configuration.GetSection("ForwardedHeaders").Get<ForwardedHeadersConfiguration>() ?? new ForwardedHeadersConfiguration();
+            services.Configure<ForwardedHeadersOptions>(options =>
+            {
+                forwardedHeadersConfig.ApplyToForwardedHeadersOptions(options);
+            });
         }
 
         private static void ConfigureCommonServicesWithUI(IServiceCollection services, IConfiguration configuration)
@@ -178,6 +186,25 @@ namespace GreeACLocalServer.Api
 
         private static void ConfigureWebApplication(WebApplication app)
         {
+            // IMPORTANT: UseForwardedHeaders must be called FIRST in production
+            if (!app.Environment.IsDevelopment())
+            {
+                app.UseForwardedHeaders();
+                // Log the forwarded headers for debugging
+                app.Use(async (context, next) =>
+                {
+                    Log.Debug("Request Scheme: {Scheme}, Host: {Host}, Headers: {@Headers}", 
+                        context.Request.Scheme, 
+                        context.Request.Host,
+                        new { 
+                            XForwardedProto = context.Request.Headers["X-Forwarded-Proto"].ToString(),
+                            XForwardedFor = context.Request.Headers["X-Forwarded-For"].ToString(),
+                            XForwardedHost = context.Request.Headers["X-Forwarded-Host"].ToString()
+                        });
+                    await next();
+                });
+            }
+
             // Minimal API endpoints under /api
             var api = app.MapGroup("/api");
             api.MapGet("/devices", async (IInternalDeviceManagerService dms) =>
@@ -208,12 +235,6 @@ namespace GreeACLocalServer.Api
             else
             {
                 app.UseResponseCompression();
-                app.UseHsts();
-                app.UseForwardedHeaders(new ForwardedHeadersOptions
-                {
-                    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
-                });
-                app.UseHttpsRedirection();
             }
 
             app.UseAntiforgery();
