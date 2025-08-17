@@ -1,0 +1,37 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="32" cy="32" r="30" fill="#1976D2" stroke="#0D47A1" stroke-width="2"/>
+  
+  <!-- Server rack base -->
+  <rect x="16" y="20" width="32" height="28" rx="2" fill="#2196F3" stroke="#1565C0" stroke-width="1"/>
+  
+  <!-- Server segments -->
+  <rect x="18" y="22" width="28" height="6" rx="1" fill="#42A5F5" stroke="#1976D2" stroke-width="0.5"/>
+  <rect x="18" y="30" width="28" height="6" rx="1" fill="#42A5F5" stroke="#1976D2" stroke-width="0.5"/>
+  <rect x="18" y="38" width="28" height="8" rx="1" fill="#42A5F5" stroke="#1976D2" stroke-width="0.5"/>
+  
+  <!-- AC Unit front panel -->
+  <rect x="20" y="40" width="24" height="6" rx="1" fill="#E3F2FD" stroke="#90CAF9" stroke-width="0.5"/>
+  
+  <!-- AC Vents -->
+  <line x1="22" y1="42" x2="42" y2="42" stroke="#1976D2" stroke-width="0.8"/>
+  <line x1="22" y1="44" x2="42" y2="44" stroke="#1976D2" stroke-width="0.8"/>
+  
+  <!-- Server LED indicators -->
+  <circle cx="20" cy="25" r="1" fill="#4CAF50"/>
+  <circle cx="23" cy="25" r="1" fill="#4CAF50"/>
+  <circle cx="20" cy="33" r="1" fill="#4CAF50"/>
+  <circle cx="23" cy="33" r="1" fill="#4CAF50"/>
+  
+  <!-- Cooling/temperature symbol -->
+  <path d="M38 24 L42 28 L38 32 L34 28 Z" fill="#00BCD4" opacity="0.8"/>
+  <circle cx="38" cy="28" r="1.5" fill="#E0F7FA"/>
+  
+  <!-- Network connection waves -->
+  <path d="M26 12 Q32 8 38 12" fill="none" stroke="#E3F2FD" stroke-width="2" opacity="0.8"/>
+  <path d="M28 14 Q32 11 36 14" fill="none" stroke="#E3F2FD" stroke-width="1.5" opacity="0.6"/>
+  
+  <!-- Power button -->
+  <circle cx="41" cy="33" r="1.5" fill="none" stroke="#E3F2FD" stroke-width="0.8"/>
+  <line x1="41" y1="31.8" x2="41" y2="33" stroke="#E3F2FD" stroke-width="0.8"/>
+</svg>
