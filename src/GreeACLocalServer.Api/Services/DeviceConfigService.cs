@@ -15,10 +15,12 @@ namespace GreeACLocalServer.Api.Services;
 public class DeviceConfigService : IDeviceConfigService
 {
     private readonly ILogger<DeviceConfigService> _logger;
+    private readonly CryptoService _cryptoService;
 
-    public DeviceConfigService(ILogger<DeviceConfigService> logger)
+    public DeviceConfigService(ILogger<DeviceConfigService> logger, CryptoService cryptoService)
     {
         _logger = logger;
+        _cryptoService = cryptoService;
     }
 
     public async Task<DeviceStatusResponse> QueryDeviceStatusAsync(DeviceStatusRequest request, CancellationToken cancellationToken = default)
@@ -148,7 +150,7 @@ public class DeviceConfigService : IDeviceConfigService
             }
 
             // Decrypt the pack using default key (empty string)
-            var decryptedPack = DeviceCryptoHelper.Decrypt(packProp.GetString()!, "");
+            var decryptedPack = _cryptoService.Decrypt(packProp.GetString()!, "");
             using var packDoc = JsonDocument.Parse(decryptedPack);
             var packRoot = packDoc.RootElement;
 
@@ -177,7 +179,7 @@ public class DeviceConfigService : IDeviceConfigService
             {
                 cid = "app",
                 i = 1,
-                pack = DeviceCryptoHelper.Encrypt(bindPack, ""),
+                pack = _cryptoService.Encrypt(bindPack, ""),
                 t = "pack",
                 tcid = macAddress,
                 uid = 22130
@@ -208,7 +210,7 @@ public class DeviceConfigService : IDeviceConfigService
                 };
             }
 
-            var decryptedBindPack = DeviceCryptoHelper.Decrypt(bindPackProp.GetString()!, "");
+            var decryptedBindPack = _cryptoService.Decrypt(bindPackProp.GetString()!, "");
             using var bindPackDoc = JsonDocument.Parse(decryptedBindPack);
             var bindPackRoot = bindPackDoc.RootElement;
 
@@ -392,7 +394,7 @@ public class DeviceConfigService : IDeviceConfigService
             {
                 cid = "app",
                 i = 0,
-                pack = DeviceCryptoHelper.Encrypt(packData, cryptoKey),
+                pack = _cryptoService.Encrypt(packData, cryptoKey),
                 t = "pack",
                 tcid = macAddress,
                 uid = 22130
@@ -423,7 +425,7 @@ public class DeviceConfigService : IDeviceConfigService
                 };
             }
 
-            var decryptedResponse = DeviceCryptoHelper.Decrypt(packProp.GetString()!, cryptoKey);
+            var decryptedResponse = _cryptoService.Decrypt(packProp.GetString()!, cryptoKey);
             
             return new PackCommandResult
             {
@@ -505,54 +507,5 @@ public class DeviceConfigService : IDeviceConfigService
         public string? ResponseData { get; set; }
         public string Message { get; set; } = string.Empty;
         public string? ErrorCode { get; set; }
-    }
-}
-
-/// <summary>
-/// Helper class for device crypto operations based on GreeAC-ConfigTool
-/// </summary>
-public static class DeviceCryptoHelper
-{
-    private const string DefaultKey = "a3K8Bx%2r8Y7#xDh";
-
-    public static string Decrypt(string pack, string key)
-    {
-        if (string.IsNullOrEmpty(key))
-            key = DefaultKey;
-
-        using var aes = System.Security.Cryptography.Aes.Create();
-        aes.Mode = System.Security.Cryptography.CipherMode.ECB;
-        aes.Key = Encoding.UTF8.GetBytes(key);
-        aes.Padding = System.Security.Cryptography.PaddingMode.PKCS7;
-
-        using var decryptor = aes.CreateDecryptor(aes.Key, aes.IV);
-        using var msDecrypt = new MemoryStream(Convert.FromBase64String(pack));
-        using var csDecrypt = new System.Security.Cryptography.CryptoStream(msDecrypt, decryptor, System.Security.Cryptography.CryptoStreamMode.Read);
-        using var srDecrypt = new StreamReader(csDecrypt);
-        
-        return srDecrypt.ReadToEnd();
-    }
-
-    public static string Encrypt(string pack, string key)
-    {
-        if (string.IsNullOrEmpty(key))
-            key = DefaultKey;
-
-        using var aes = System.Security.Cryptography.Aes.Create();
-        aes.Mode = System.Security.Cryptography.CipherMode.ECB;
-        aes.Key = Encoding.UTF8.GetBytes(key);
-        aes.Padding = System.Security.Cryptography.PaddingMode.PKCS7;
-
-        using var encryptor = aes.CreateEncryptor(aes.Key, aes.IV);
-        using var msEncrypt = new MemoryStream();
-        using var csEncrypt = new System.Security.Cryptography.CryptoStream(msEncrypt, encryptor, System.Security.Cryptography.CryptoStreamMode.Write);
-        using var swEncrypt = new StreamWriter(csEncrypt);
-        
-        swEncrypt.Write(pack);
-        swEncrypt.Flush();
-        swEncrypt.Close();
-        msEncrypt.Flush();
-        
-        return Convert.ToBase64String(msEncrypt.ToArray());
     }
 }
