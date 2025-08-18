@@ -21,6 +21,7 @@ This project provides a **modern, feature-rich local replacement server for GREE
 - **MudBlazor Material Design** components with automatic dark/light theme detection
 - **Real-time Device Monitoring** via SignalR
 - **Device Dashboard** showing MAC addresses, IP addresses, DNS names, and connection status
+- **Built-in Device Configuration Tool** for managing AC settings without external tools
 - **Responsive Design** optimized for desktop and mobile
 
 ### **Advanced Device Management**
@@ -317,7 +318,35 @@ Configure your DNS server (BIND, Unbound, etc.) with appropriate zone files.
 
 ## 📱 **Device Configuration**
 
-To configure your GREE AC devices to use the local server:
+### **Built-in Device Configuration Tool**
+
+The server now includes a **built-in web-based device configuration tool** accessible through the web interface at `/device-config`. This eliminates the need for external tools in most scenarios.
+
+#### **Features**
+- **Query Device Status** - Retrieve current device name and remote host settings
+- **Set Device Name** - Change the friendly name of your AC device
+- **Configure Remote Host** - Update the server address the device connects to
+- **Autocomplete IP Selection** - Choose from known devices or enter IP manually
+- **Automatic Device Discovery** - Scans and binds devices automatically
+- **Real-time Feedback** - Immediate success/error notifications
+
+#### **How to Use**
+1. **Access the tool** at `http://your-server:5100/device-config`
+2. **Select or enter device IP** from the autocomplete dropdown
+3. **Choose your operation**:
+   - **Query Status** - View current device configuration
+   - **Set Name** - Change device display name
+   - **Set Remote Host** - Configure server connection settings
+4. **Execute** - The tool automatically handles device scanning and encryption
+
+#### **Requirements**
+- **Network Access** - Device must be accessible on the same network
+- **UDP Port 7000** - Used for device communication
+- **Device State** - AC must be powered on and network-connected
+
+### **External Configuration Tool (Alternative)**
+
+For advanced use cases or initial setup, you can also use:
 
 1. **Use the original configuration tool**: [GreeAC-ConfigTool](https://github.com/emtek-at/GreeAC-ConfigTool)
 2. **Configure the device** to point to your domain name (e.g., `gree.example.com`)
@@ -329,12 +358,19 @@ To configure your GREE AC devices to use the local server:
 
 Access the web interface at: `http://your-server-ip:5100`
 
-### **Features**
+### **Dashboard Features**
 - **Live Device Dashboard** - Real-time view of connected devices
 - **Device Information** - MAC addresses, IP addresses, DNS names
 - **Connection Status** - Last seen timestamps and health indicators
 - **Dark/Light Theme** - Automatic detection based on browser preference
 - **Responsive Design** - Works on desktop, tablet, and mobile
+
+### **Device Configuration Tool** (`/device-config`)
+- **Query Device Status** - View current device name and remote host settings
+- **Set Device Name** - Change the friendly name displayed on your AC
+- **Configure Remote Host** - Update which server the device connects to
+- **Autocomplete Selection** - Easy selection from known connected devices
+- **Real-time Operations** - Immediate feedback on configuration changes
 
 ### **Dashboard Information**
 - **MAC Address** - Device hardware identifier
@@ -350,6 +386,14 @@ Access the web interface at: `http://your-server-ip:5100`
 2. **Check Port Access** - Port 5000 must be accessible
 3. **Firewall Rules** - Allow inbound connections on port 5000
 4. **Device Configuration** - Verify AC is configured for your domain
+
+### **Device Configuration Issues**
+1. **Device Not Found** - Ensure AC is powered on and network-connected
+2. **Connection Timeout** - Verify UDP port 7000 is not blocked
+3. **Encryption Errors** - Device may need to be reset to factory defaults
+4. **IP Address Not Listed** - Only devices that have connected appear in autocomplete
+5. **Name Change Not Applied** - Power cycle the AC unit after changing settings
+6. **Remote Host Update Failed** - Verify the new server address is correct and accessible
 
 ### **Web UI Not Loading**
 1. **Check Port 5100** - Ensure it's not blocked by firewall
@@ -464,7 +508,6 @@ This project is licensed under the **GNU General Public License v3.0** - see the
 
 - **Original Project**: [GreeAC-DummyServer](https://github.com/emtek-at/GreeAC-DummyServer)
 - **Configuration Tool**: [GreeAC-ConfigTool](https://github.com/emtek-at/GreeAC-ConfigTool)
-- **GREE Protocol Documentation**: Included in the original repository
 
 ---
 
