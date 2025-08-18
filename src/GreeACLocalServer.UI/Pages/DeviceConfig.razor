@@ -1,6 +1,7 @@
 @page "/device-config"
 @implements IDisposable
 @inject IDeviceConfigService DeviceConfigService
+@inject IDeviceManagerService DeviceManagerService
 @inject ISnackbar Snackbar
 
 <PageTitle>Device Configuration</PageTitle>
@@ -17,11 +18,19 @@
             <EditForm Model="@_statusRequest" OnValidSubmit="@QueryDeviceStatus">
                 <DataAnnotationsValidator />
                 
-                <MudTextField @bind-Value="@_statusRequest.IpAddress" 
-                              Label="Device IP Address"
-                              Placeholder="192.168.1.100"
-                              For="@(() => _statusRequest.IpAddress)"
-                              Class="mb-4" />
+                <MudAutocomplete T="string" 
+                                 @bind-Value="@_statusRequest.IpAddress"
+                                 Label="Device IP Address"
+                                 Placeholder="Select or enter IP address"
+                                 SearchFunc="@SearchDeviceIpAddresses"
+                                 For="@(() => _statusRequest.IpAddress)"
+                                 Class="mb-4"
+                                 ShowProgressIndicator="@_loadingDevices"
+                                 Clearable="true"
+                                 ResetValueOnEmptyText="true"
+                                 CoerceValue="true"
+                                 AdornmentIcon="@Icons.Material.Filled.DeviceHub"
+                                 AdornmentColor="Color.Primary" />
                               
                 <MudButton ButtonType="ButtonType.Submit" 
                            Variant="Variant.Filled" 
@@ -87,11 +96,19 @@
             <EditForm Model="@_setNameRequest" OnValidSubmit="@SetDeviceName">
                 <DataAnnotationsValidator />
                 
-                <MudTextField @bind-Value="@_setNameRequest.IpAddress" 
-                              Label="Device IP Address"
-                              Placeholder="192.168.1.100"
-                              For="@(() => _setNameRequest.IpAddress)"
-                              Class="mb-4" />
+                <MudAutocomplete T="string" 
+                                 @bind-Value="@_setNameRequest.IpAddress"
+                                 Label="Device IP Address"
+                                 Placeholder="Select or enter IP address"
+                                 SearchFunc="@SearchDeviceIpAddresses"
+                                 For="@(() => _setNameRequest.IpAddress)"
+                                 Class="mb-4"
+                                 ShowProgressIndicator="@_loadingDevices"
+                                 Clearable="true"
+                                 ResetValueOnEmptyText="true"
+                                 CoerceValue="true"
+                                 AdornmentIcon="@Icons.Material.Filled.DeviceHub"
+                                 AdornmentColor="Color.Primary" />
                               
                 <MudTextField @bind-Value="@_setNameRequest.DeviceName" 
                               Label="New Device Name"
@@ -147,15 +164,23 @@
             <EditForm Model="@_setHostRequest" OnValidSubmit="@SetRemoteHost">
                 <DataAnnotationsValidator />
                 
-                <MudTextField @bind-Value="@_setHostRequest.IpAddress" 
-                              Label="Device IP Address"
-                              Placeholder="192.168.1.100"
-                              For="@(() => _setHostRequest.IpAddress)"
-                              Class="mb-4" />
+                <MudAutocomplete T="string" 
+                                 @bind-Value="@_setHostRequest.IpAddress"
+                                 Label="Device IP Address"
+                                 Placeholder="Select or enter IP address"
+                                 SearchFunc="@SearchDeviceIpAddresses"
+                                 For="@(() => _setHostRequest.IpAddress)"
+                                 Class="mb-4"
+                                 ShowProgressIndicator="@_loadingDevices"
+                                 Clearable="true"
+                                 ResetValueOnEmptyText="true"
+                                 CoerceValue="true"
+                                 AdornmentIcon="@Icons.Material.Filled.DeviceHub"
+                                 AdornmentColor="Color.Primary" />
                               
                 <MudTextField @bind-Value="@_setHostRequest.RemoteHost" 
                               Label="New Remote Host"
-                              Placeholder="192.168.1.50"
+                              Placeholder="gree.local.home"
                               For="@(() => _setHostRequest.RemoteHost)"
                               Class="mb-4" />
                               
@@ -209,7 +234,10 @@
             <MudText Typo="Typo.h6" Class="mb-4">Usage Notes</MudText>
             <MudList T="string" Dense="true">
                 <MudListItem T="string" Icon="@Icons.Material.Filled.Info">
-                    <MudText Typo="Typo.body2">Enter the IP address of the Gree AC device you want to configure.</MudText>
+                    <MudText Typo="Typo.body2">Select a device from the dropdown or enter an IP address manually.</MudText>
+                </MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.Search">
+                    <MudText Typo="Typo.body2">The autocomplete shows known devices that have connected to this server.</MudText>
                 </MudListItem>
                 <MudListItem T="string" Icon="@Icons.Material.Filled.Security">
                     <MudText Typo="Typo.body2">The device will be scanned and bound automatically to obtain crypto keys.</MudText>
@@ -237,8 +265,59 @@
     private bool _queryInProgress = false;
     private bool _setNameInProgress = false;
     private bool _setHostInProgress = false;
+    private bool _loadingDevices = false;
 
     private CancellationTokenSource _cancellationTokenSource = new();
+    private List<DeviceDto> _availableDevices = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAvailableDevicesAsync();
+    }
+
+    private async Task LoadAvailableDevicesAsync()
+    {
+        try
+        {
+            _loadingDevices = true;
+            StateHasChanged();
+
+            _availableDevices = (await DeviceManagerService.GetAllDeviceStatesAsync()).ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load available devices: {ex.Message}", Severity.Warning);
+        }
+        finally
+        {
+            _loadingDevices = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task<IEnumerable<string>> SearchDeviceIpAddresses(string value, CancellationToken cancellationToken)
+    {
+        // Refresh devices list if empty or if needed
+        if (!_availableDevices.Any() && !_loadingDevices)
+        {
+            await LoadAvailableDevicesAsync();
+        }
+
+        // If no search value, return all IP addresses
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return _availableDevices.Select(d => d.IpAddress).Distinct().OrderBy(ip => ip);
+        }
+
+        // Filter IP addresses based on search value
+        var searchValue = value.Trim().ToLowerInvariant();
+        return _availableDevices
+            .Where(d => d.IpAddress.ToLowerInvariant().Contains(searchValue) || 
+                       (!string.IsNullOrEmpty(d.DNSName) && d.DNSName.ToLowerInvariant().Contains(searchValue)))
+            .Select(d => d.IpAddress)
+            .Distinct()
+            .OrderBy(ip => ip);
+    }
 
     private async Task QueryDeviceStatus()
     {
