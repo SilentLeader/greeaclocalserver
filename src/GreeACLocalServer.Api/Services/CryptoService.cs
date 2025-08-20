@@ -16,7 +16,9 @@ public class CryptoService(IOptions<ServerOptions> options) : ICryptoService
     public string Decrypt(string pack, string? key = null)
     {
         if (string.IsNullOrEmpty(key))
+        {
             key = _cryptoKey;
+        }
 
         using var myaes = Aes.Create();
         myaes.Mode = CipherMode.ECB;
@@ -28,8 +30,7 @@ public class CryptoService(IOptions<ServerOptions> options) : ICryptoService
         using var msDecrypt = new MemoryStream(Convert.FromBase64String(pack));
         using var csDecrypt = new CryptoStream(msDecrypt, decryptor, CryptoStreamMode.Read);
         using var srDecrypt = new StreamReader(csDecrypt);
-        var plaintext = srDecrypt.ReadToEnd();
-        return plaintext;
+        return srDecrypt.ReadToEnd();
     }
 
     /// <summary>
@@ -41,7 +42,10 @@ public class CryptoService(IOptions<ServerOptions> options) : ICryptoService
     public string Encrypt(string pack, string? key = null)
     {
         if (string.IsNullOrEmpty(key))
+        {
             key = _cryptoKey;
+        }
+
 
         using var myaes = Aes.Create();
         myaes.Mode = CipherMode.ECB;
@@ -57,8 +61,6 @@ public class CryptoService(IOptions<ServerOptions> options) : ICryptoService
         swEncrypt.Flush();
         swEncrypt.Close();
         msEncrypt.Flush();
-        var encrypted = Convert.ToBase64String(msEncrypt.ToArray());
-
-        return encrypted;
+        return Convert.ToBase64String(msEncrypt.ToArray());
     }
 }

@@ -176,6 +176,9 @@ dotnet_diagnostic.IDE0056.severity = suggestion
 # IDE0057: Use range operator
 dotnet_diagnostic.IDE0057.severity = suggestion
 
+# IDE0009: Use explicit type instead var
+dotnet_diagnostic.IDE0008.severity = silent
+
 # Naming conventions
 
 # Pascal case for public members
