@@ -29,6 +29,13 @@ All GREE communication flows through `MessageHandlerService.GetResponse()`:
 
 Example command handlers: `HandleDiscover()`, `HandlePack()`, `HandleTime()`, `HandleHeartbeat()`
 
+### WiFi Configuration Feature
+The UI includes a dedicated page (`WifiConfig.razor`) for configuring AC WiFi:
+- **Command Generation**: Creates netcat commands based on user inputs (SSID, password, OS)
+- **Cross-platform Support**: Generates appropriate commands for Linux, macOS, and Windows
+- **Security Features**: Password visibility toggle, JSON string escaping
+- **User Experience**: Clipboard integration, form validation, step-by-step instructions
+
 ## Development Workflows
 
 ### Building & Running
@@ -127,6 +134,8 @@ The UI project uses **Blazor WebAssembly** with **MudBlazor** for Material Desig
 - **Layout Structure**: `MainLayout.razor` with MudAppBar, MudDrawer, and MudMainContent
 - **Component Usage**: MudCard, MudGrid, MudText, MudIcon for device dashboard
 - **Service Integration**: MudDialogProvider, MudSnackbarProvider for user interactions
+- **Form Components**: MudTextField, MudSelect, MudButton for WiFi configuration
+- **Interactive Elements**: Password visibility toggles, clipboard operations via JSRuntime
 
 #### Real-time UI Updates
 SignalR client integration for live device status:

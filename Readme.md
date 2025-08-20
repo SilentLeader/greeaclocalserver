@@ -22,6 +22,7 @@ This project provides a **modern, feature-rich local replacement server for GREE
 - **Real-time Device Monitoring** via SignalR
 - **Device Dashboard** showing MAC addresses, IP addresses, DNS names, and connection status
 - **Built-in Device Configuration Tool** for managing AC settings without external tools
+- **WiFi Configuration Tool** with cross-platform command generation (Linux, macOS, Windows)
 - **Management Control** - Device configuration features can be disabled for security
 - **Responsive Design** optimized for desktop and mobile
 
@@ -362,6 +363,56 @@ The server now includes a **built-in web-based device configuration tool** acces
 - **UDP Port 7000** - Used for device communication
 - **Device State** - AC must be powered on and network-connected
 
+### **Built-in WiFi Configuration Tool**
+
+The server includes a dedicated **WiFi Configuration page** at `/wifi-config` to help users configure their air conditioner's WiFi settings without external tools.
+
+#### **Features**
+- **Cross-platform Support** - Generates appropriate commands for Linux, macOS, and Windows
+- **Real-time Command Generation** - Command updates immediately as you type
+- **Multiple Windows Options** - WSL, PowerShell (native), and Ncat alternatives
+- **Password Security** - Visibility toggle and proper JSON string escaping
+- **Copy to Clipboard** - One-click command copying
+- **Step-by-step Instructions** - Clear guidance for the entire process
+- **Installation Help** - Platform-specific installation instructions
+
+#### **Supported Platforms**
+- **Linux** - Standard netcat (`nc -cu`)
+- **macOS** - Standard netcat (`nc -cu`)
+- **Windows (WSL)** - Netcat in Windows Subsystem for Linux
+- **Windows (PowerShell)** - Native .NET UDP socket approach (no additional software needed)
+- **Windows (Ncat)** - Nmap suite's netcat alternative
+
+#### **How to Use**
+1. **Reset AC WiFi** - Press MODE + WIFI (or MODE + TURBO) on remote for 5 seconds
+2. **Connect to AC hotspot** - Join the AC's WiFi network (8-character alphanumeric SSID)
+3. **Access the tool** at `http://your-server:5100/wifi-config`
+4. **Enter WiFi credentials** - Input your home WiFi SSID and password
+5. **Select your OS** - Choose appropriate operating system
+6. **Copy and run command** - Execute the generated command in your terminal
+
+#### **Generated Commands**
+
+**Linux/macOS/WSL:**
+```bash
+echo -n "{\"psw\": \"password\",\"ssid\": \"network\",\"t\": \"wlan\"}" | nc -cu 192.168.1.1 7000
+```
+
+**Windows PowerShell (recommended for Windows users):**
+```powershell
+$bytes = [System.Text.Encoding]::UTF8.GetBytes('{"psw": "password","ssid": "network","t": "wlan"}'); $client = New-Object System.Net.Sockets.UdpClient; $client.Connect('192.168.1.1', 7000); $client.Send($bytes, $bytes.Length); $client.Close()
+```
+
+**Windows Ncat:**
+```cmd
+echo {"psw": "password","ssid": "network","t": "wlan"} | ncat -u 192.168.1.1 7000
+```
+
+#### **Requirements**
+- **AC in AP mode** - Device must be broadcasting its own WiFi network
+- **Network connection** - Connected to the AC's WiFi hotspot (192.168.1.1)
+- **Appropriate tools** - netcat, PowerShell, or Ncat depending on platform
+
 ### **External Configuration Tool (Alternative)**
 
 For advanced use cases or initial setup, you can also use:
@@ -389,6 +440,14 @@ Access the web interface at: `http://your-server-ip:5100`
 - **Configure Remote Host** - Update which server the device connects to
 - **Autocomplete Selection** - Easy selection from known connected devices
 - **Real-time Operations** - Immediate feedback on configuration changes
+
+### **WiFi Configuration Tool** (`/wifi-config`)
+- **Cross-platform Command Generation** - Creates appropriate commands for Linux, macOS, and Windows
+- **Real-time Updates** - Command generates immediately as you type
+- **Multiple Windows Support** - WSL, PowerShell (native), and Ncat options
+- **Security Features** - Password visibility toggle and JSON string escaping
+- **Step-by-step Guidance** - Complete instructions for AC WiFi setup
+- **Clipboard Integration** - One-click command copying
 
 ### **Dashboard Information**
 - **MAC Address** - Device hardware identifier
@@ -438,6 +497,15 @@ The server exposes RESTful API endpoints for programmatic access:
 6. **Remote Host Update Failed** - Verify the new server address is correct and accessible
 7. **Management Features Disabled** - Check `EnableManagement` setting in server configuration
 8. **"Device management is disabled" Error** - Server administrator has disabled management features via `EnableManagement: false`
+
+### **WiFi Configuration Issues**
+1. **AC Not in AP Mode** - Reset WiFi by pressing MODE + WIFI (or MODE + TURBO) for 5 seconds on remote
+2. **Cannot Connect to AC Hotspot** - Look for 8-character alphanumeric SSID (e.g., "u34k5l166")
+3. **Command Not Found (Windows)** - Use PowerShell option (no additional software needed) or install WSL/Ncat
+4. **Connection Refused** - Ensure you're connected to AC's WiFi network and 192.168.1.1 is reachable
+5. **Command Fails on Windows** - Try PowerShell version or install netcat via `choco install netcat`
+6. **AC Doesn't Connect to Home WiFi** - Verify SSID and password are correct, check WiFi signal strength
+7. **Special Characters in Password** - Use PowerShell option as it handles JSON escaping automatically
 
 ### **Web UI Not Loading**
 1. **Check Port 5100** - Ensure it's not blocked by firewall
@@ -552,6 +620,7 @@ This project is licensed under the **GNU General Public License v3.0** - see the
 
 - **Original Project**: [GreeAC-DummyServer](https://github.com/emtek-at/GreeAC-DummyServer)
 - **Configuration Tool**: [GreeAC-ConfigTool](https://github.com/emtek-at/GreeAC-ConfigTool)
+- **WiFi Configuration Reference**: [GREE HVAC MQTT Bridge](https://github.com/arthurkrupa/gree-hvac-mqtt-bridge) - Source for WiFi configuration method
 
 ---
 
