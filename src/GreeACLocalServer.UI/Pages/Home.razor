@@ -30,7 +30,7 @@ else if (_devices.Count == 0)
 else
 {
     <MudGrid>
-        @foreach (var device in _devices)
+        @foreach (var device in _devices.OrderBy(x => x.DNSName))
         {
             var isOnline = IsDeviceOnline(device);
             <MudItem xs="12" sm="6" md="4" lg="3" @key="device.MacAddress">
@@ -65,37 +65,30 @@ else
 }
 
 @code {
+    [Inject] private NavigationManager Navigation { get; set; } = default!;
+
     private bool _loading = true;
     private string? _error;
     private List<DeviceDto> _devices = new();
     private HubConnection? _hub;
-    private readonly Dictionary<string, DeviceDetailsDialog> _openDialogComponents = new();
+    private DeviceDetailsDialog? _openDialogComponent;
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
-            // Initial fetch as fallback
-            var items = await DeviceService.GetAllDeviceStatesAsync();
-            _devices = items.ToList();
-
             // Initialize SignalR connection
-            await InitializeSignalRConnection();
-        }
-        catch (HttpRequestException ex) when (ex.Message.Contains("SSL"))
-        {
-            _error = $"SSL connection failed: {ex.Message}. This might be a configuration issue with HTTPS.";
-            Console.WriteLine($"SSL Error: {ex}");
-        }
-        catch (TaskCanceledException ex)
-        {
-            _error = $"Connection timed out: {ex.Message}";
-            Console.WriteLine($"Timeout Error: {ex}");
+            if(!(await InitializeSignalRConnection()))
+            {
+                // Initial fetch as fallback
+                var items = await DeviceService.GetAllDeviceStatesAsync();
+                _devices = items.ToList();
+            }
         }
         catch (Exception ex)
         {
             _error = $"Failed to load devices: {ex.Message}";
-            Console.WriteLine($"General Error: {ex}");
+            Console.WriteLine(_error);
         }
         finally
         {
@@ -103,33 +96,28 @@ else
         }
     }
 
-    private async Task InitializeSignalRConnection()
+    private async Task<bool> InitializeSignalRConnection()
     {
         try
         {
             var hubUrl = Navigation.ToAbsoluteUri("/hubs/devices");
 
-            // Build SignalR connection with custom retry policy: start 5s, +5s each time, cap 60s
             _hub = new HubConnectionBuilder()
-                .WithUrl(hubUrl, options =>
-                {
-                    // Configure connection timeouts
-                    options.CloseTimeout = TimeSpan.FromSeconds(30);
-                })
-                .WithAutomaticReconnect(new LinearBackoffRetryPolicy(5, 5, 60))
+                .WithUrl(hubUrl)
+                .WithAutomaticReconnect(new LinearBackoffRetryPolicy())
                 .Build();
 
             // Set up event handlers
             SetupSignalREventHandlers();
 
             // Start connection with timeout
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-            await _hub.StartAsync(cts.Token);
+            await _hub.StartAsync();
+            return true;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"SignalR connection failed: {ex}");
-            throw new Exception($"SignalR connection failed: {ex.Message}");
+            Console.WriteLine($"SignalR connection failed: {ex.Message}");
+            return false;
         }
     }
 
@@ -161,10 +149,11 @@ else
 
         _hub.On<string>(DeviceHubMethods.DeviceRemoved, async mac =>
         {
-            _devices.RemoveAll(d => string.Equals(d.MacAddress, mac, StringComparison.OrdinalIgnoreCase));
-            _devices = _devices.ToList();
-            await InvokeAsync(StateHasChanged);
-            CloseDialogForDevice(mac);
+            if(_devices.RemoveAll(d => string.Equals(d.MacAddress, mac, StringComparison.OrdinalIgnoreCase)) > 0)
+            {
+                await InvokeAsync(StateHasChanged);
+                CloseDialogForDevice(mac);
+            }
         });
     }
 
@@ -182,12 +171,12 @@ else
             { "Device", device },
             { "OnDialogCreated", new Action<DeviceDetailsDialog>(dialog => 
                 {
-                    _openDialogComponents[device.MacAddress] = dialog;
+                    _openDialogComponent = dialog;
                 })
             },
             { "OnDialogClosed", new Action(() => 
                 {
-                    _openDialogComponents.Remove(device.MacAddress);
+                    _openDialogComponent = null;
                 })
             }
         };
@@ -214,22 +203,19 @@ else
 
     private async Task UpdateOpenDialog(DeviceDto updatedDevice)
     {
-        if (_openDialogComponents.TryGetValue(updatedDevice.MacAddress, out var dialogComponent))
+        if(_openDialogComponent?.Device?.MacAddress == updatedDevice.MacAddress)
         {
-            await dialogComponent.UpdateDevice(updatedDevice);
+            await _openDialogComponent.UpdateDevice(updatedDevice);
         }
     }
 
     private void CloseDialogForDevice(string macAddress)
     {
-        if (_openDialogComponents.TryGetValue(macAddress, out var dialogComponent))
+        if(_openDialogComponent?.Device?.MacAddress == macAddress)
         {
-            dialogComponent.CloseDialog();
-            _openDialogComponents.Remove(macAddress);
+            _openDialogComponent.CloseDialog();
         }
     }
-
-    [Inject] private NavigationManager Navigation { get; set; } = default!;
 
     public async ValueTask DisposeAsync()
     {

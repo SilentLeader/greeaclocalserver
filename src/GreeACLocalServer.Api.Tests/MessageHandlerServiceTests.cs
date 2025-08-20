@@ -1,17 +1,17 @@
-using Xunit;
-using Moq;
+using System.Globalization;
+using GreeACLocalServer.Api.Interfaces;
+using GreeACLocalServer.Api.Options;
+using GreeACLocalServer.Api.Services;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using GreeACLocalServer.Api.Services;
-using GreeACLocalServer.Api.Options;
-using GreeACLocalServer.Api.Responses;
-using GreeACLocalServer.Api.Request;
-using System.Globalization;
+using Moq;
+
+namespace GreeACLocalServer.Api.Tests;
 
 public class MessageHandlerServiceTests
 {
     private MessageHandlerService CreateService(
-        CryptoService? cryptoService = null,
+        ICryptoService? cryptoService = null,
         ServerOptions? serverOptions = null,
         ILogger<MessageHandlerService>? logger = null)
     {
@@ -46,9 +46,9 @@ public class MessageHandlerServiceTests
     public void GetResponse_DiscoverRequest_ReturnsDiscoverResponse()
     {
         var service = CreateService();
-        var request = new GreeACLocalServer.Api.Request.DefaultRequest
+        var request = new Request.DefaultRequest
         {
-            Type = GreeACLocalServer.Api.ValueObjects.CommandType.Discover,
+            Type = ValueObjects.CommandType.Discover,
             MacAddress = "AABBCCDDEEFF"
         };
         var json = System.Text.Json.JsonSerializer.Serialize(request);
@@ -58,7 +58,7 @@ public class MessageHandlerServiceTests
         Assert.False(result.KeepAlive);
 
         // Decrypt the inner response and check for ResponseType.Server (property 't')
-        var cryptoService = service.GetType().GetField("_cryptoService", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.GetValue(service) as CryptoService;
+        var cryptoService = service.GetType().GetField("_cryptoService", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.GetValue(service) as ICryptoService;
         Assert.NotNull(cryptoService);
         using var doc = System.Text.Json.JsonDocument.Parse(result.Data);
         var root = doc.RootElement;
@@ -75,7 +75,7 @@ public class MessageHandlerServiceTests
     {
         var service = CreateService();
         var pack = new GreeACLocalServer.Api.Request.Pack { Type = "unknown", MacAddress = "AABBCCDDEEFF" };
-        var cryptoService = service.GetType().GetField("_cryptoService", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.GetValue(service) as CryptoService;
+        var cryptoService = service.GetType().GetField("_cryptoService", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.GetValue(service) as ICryptoService;
         Assert.NotNull(cryptoService);
         var encryptedPack = cryptoService!.Encrypt(System.Text.Json.JsonSerializer.Serialize(pack));
         var request = new GreeACLocalServer.Api.Request.DefaultRequest

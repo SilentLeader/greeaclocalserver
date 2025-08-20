@@ -1,16 +1,10 @@
 using System.Text.Json;
 using GreeACLocalServer.Api.Request;
 using GreeACLocalServer.Api.Responses;
-using GreeACLocalServer.Api.ValueObjects;
-using Microsoft.Extensions.Options;
-using GreeACLocalServer.Api.Options;
-using Microsoft.Extensions.Logging;
-using GreeACLocalServer.Api.Models;
-using GreeHandlerResponse = GreeACLocalServer.Api.Models.GreeHandlerResponse;
 
 namespace GreeACLocalServer.Api.Services;
 
-public class MessageHandlerService(CryptoService cryptoService, IOptions<ServerOptions> serverOptions, ILogger<MessageHandlerService> logger)
+public class MessageHandlerService(ICryptoService cryptoService, IOptions<ServerOptions> serverOptions, ILogger<MessageHandlerService> logger)
 {
     private static JsonSerializerOptions _jsonSerializerOptions = new JsonSerializerOptions
     {
@@ -18,7 +12,7 @@ public class MessageHandlerService(CryptoService cryptoService, IOptions<ServerO
         WriteIndented = false
     };
 
-    private readonly CryptoService _cryptoService = cryptoService ?? throw new ArgumentNullException(nameof(cryptoService));
+    private readonly ICryptoService _cryptoService = cryptoService ?? throw new ArgumentNullException(nameof(cryptoService));
     private readonly ServerOptions _serverOptions = serverOptions?.Value ?? throw new ArgumentNullException(nameof(serverOptions));
     private readonly ILogger<MessageHandlerService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 

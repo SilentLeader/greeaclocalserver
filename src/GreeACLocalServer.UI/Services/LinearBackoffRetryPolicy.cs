@@ -9,7 +9,7 @@ public sealed class LinearBackoffRetryPolicy : IRetryPolicy
     private readonly int _incrementSeconds;
     private readonly int _maxSeconds;
 
-    public LinearBackoffRetryPolicy(int initialSeconds = 5, int incrementSeconds = 5, int maxSeconds = 60)
+    public LinearBackoffRetryPolicy(int initialSeconds = 5, int incrementSeconds = 5, int maxSeconds = 30)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(initialSeconds);
         ArgumentOutOfRangeException.ThrowIfNegative(incrementSeconds);

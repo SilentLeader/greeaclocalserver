@@ -21,6 +21,8 @@ This project provides a **modern, feature-rich local replacement server for GREE
 - **MudBlazor Material Design** components with automatic dark/light theme detection
 - **Real-time Device Monitoring** via SignalR
 - **Device Dashboard** showing MAC addresses, IP addresses, DNS names, and connection status
+- **Built-in Device Configuration Tool** for managing AC settings without external tools
+- **Management Control** - Device configuration features can be disabled for security
 - **Responsive Design** optimized for desktop and mobile
 
 ### **Advanced Device Management**
@@ -69,6 +71,7 @@ docker run -d \
   -e Server__DomainName=gree.example.com \
   -e Server__ExternalIp=192.168.1.100 \
   -e Server__EnableUI=true \
+  -e Server__EnableManagement=true \
   -p 5000:5000 \
   -p 5100:5100 \
   gree-ac-local-server:latest
@@ -253,7 +256,8 @@ The application is configured via `appsettings.json`. Here are the key settings:
     "ExternalIp": "192.168.1.100",   // IP address of your server
     "ListenIPAddresses": [],          // Specific IPs to bind to (empty = all)
     "CryptoKey": "a3K8Bx%2r8Y7#xDh", // GREE encryption key (default works)
-    "EnableUI": true                  // Enable/disable web interface
+    "EnableUI": true,                 // Enable/disable web interface
+    "EnableManagement": true          // Enable/disable device management features
   }
 }
 ```
@@ -280,6 +284,20 @@ The application is configured via `appsettings.json`. Here are the key settings:
 - **Use Cases**: 
   - Set to `false` for headless/embedded deployments
   - Set to `true` for monitoring and management
+
+#### **`EnableManagement`**
+- **Purpose**: Controls whether device management features are available
+- **Values**: 
+  - `true` - Device configuration features enabled (default)
+  - `false` - Device management operations disabled
+- **Affects**:
+  - **API Endpoints**: `/device-config/set-name` and `/device-config/set-remote-host` return errors when disabled
+  - **Web UI**: Management sections (Set Device Name, Set Remote Host) are hidden when disabled
+  - **Query Operations**: Device status queries (`/device-config/status`) remain available regardless of this setting
+- **Use Cases**: 
+  - Set to `false` for read-only deployments or security-conscious environments
+  - Set to `true` when device configuration changes are needed
+- **Security**: Provides an additional layer of protection against unauthorized device configuration changes
 
 ### **Additional Configuration**
 ```json
@@ -317,7 +335,36 @@ Configure your DNS server (BIND, Unbound, etc.) with appropriate zone files.
 
 ## 📱 **Device Configuration**
 
-To configure your GREE AC devices to use the local server:
+### **Built-in Device Configuration Tool**
+
+The server now includes a **built-in web-based device configuration tool** accessible through the web interface at `/device-config`. This eliminates the need for external tools in most scenarios.
+
+#### **Features**
+- **Query Device Status** - Retrieve current device name and remote host settings
+- **Set Device Name** - Change the friendly name of your AC device
+- **Configure Remote Host** - Update the server address the device connects to
+- **Autocomplete IP Selection** - Choose from known devices or enter IP manually
+- **Automatic Device Discovery** - Scans and binds devices automatically
+- **Real-time Feedback** - Immediate success/error notifications
+- **Management Control** - Configuration features can be disabled server-wide for security
+
+#### **How to Use**
+1. **Access the tool** at `http://your-server:5100/device-config`
+2. **Select or enter device IP** from the autocomplete dropdown
+3. **Choose your operation**:
+   - **Query Status** - View current device configuration
+   - **Set Name** - Change device display name
+   - **Set Remote Host** - Configure server connection settings
+4. **Execute** - The tool automatically handles device scanning and encryption
+
+#### **Requirements**
+- **Network Access** - Device must be accessible on the same network
+- **UDP Port 7000** - Used for device communication
+- **Device State** - AC must be powered on and network-connected
+
+### **External Configuration Tool (Alternative)**
+
+For advanced use cases or initial setup, you can also use:
 
 1. **Use the original configuration tool**: [GreeAC-ConfigTool](https://github.com/emtek-at/GreeAC-ConfigTool)
 2. **Configure the device** to point to your domain name (e.g., `gree.example.com`)
@@ -329,12 +376,19 @@ To configure your GREE AC devices to use the local server:
 
 Access the web interface at: `http://your-server-ip:5100`
 
-### **Features**
+### **Dashboard Features**
 - **Live Device Dashboard** - Real-time view of connected devices
 - **Device Information** - MAC addresses, IP addresses, DNS names
 - **Connection Status** - Last seen timestamps and health indicators
 - **Dark/Light Theme** - Automatic detection based on browser preference
 - **Responsive Design** - Works on desktop, tablet, and mobile
+
+### **Device Configuration Tool** (`/device-config`)
+- **Query Device Status** - View current device name and remote host settings
+- **Set Device Name** - Change the friendly name displayed on your AC
+- **Configure Remote Host** - Update which server the device connects to
+- **Autocomplete Selection** - Easy selection from known connected devices
+- **Real-time Operations** - Immediate feedback on configuration changes
 
 ### **Dashboard Information**
 - **MAC Address** - Device hardware identifier
@@ -343,13 +397,47 @@ Access the web interface at: `http://your-server-ip:5100`
 - **Last Seen** - Timestamp of last communication
 - **Status** - Online/Offline indicator
 
-## 🔧 **Troubleshooting**
+## � **API Endpoints**
+
+The server exposes RESTful API endpoints for programmatic access:
+
+### **Configuration API**
+- **GET `/api/config/server`** - Retrieve server configuration settings
+  ```json
+  {
+    "enableManagement": true,
+    "enableUI": true
+  }
+  ```
+
+### **Device Configuration API**
+- **POST `/api/device-config/status`** - Query device status (always available)
+- **POST `/api/device-config/set-name`** - Set device name (requires `EnableManagement: true`)
+- **POST `/api/device-config/set-remote-host`** - Configure remote host (requires `EnableManagement: true`)
+
+### **Device Management API**
+- **GET `/api/devices`** - List all known devices
+- **GET `/api/devices/{mac}`** - Get specific device by MAC address
+
+**Note**: Management endpoints return HTTP 200 with error response when `EnableManagement` is disabled.
+
+## �🔧 **Troubleshooting**
 
 ### **Devices Not Connecting**
 1. **Verify DNS Setup** - Ensure domain points to correct IP
 2. **Check Port Access** - Port 5000 must be accessible
 3. **Firewall Rules** - Allow inbound connections on port 5000
 4. **Device Configuration** - Verify AC is configured for your domain
+
+### **Device Configuration Issues**
+1. **Device Not Found** - Ensure AC is powered on and network-connected
+2. **Connection Timeout** - Verify UDP port 7000 is not blocked
+3. **Encryption Errors** - Device may need to be reset to factory defaults
+4. **IP Address Not Listed** - Only devices that have connected appear in autocomplete
+5. **Name Change Not Applied** - Power cycle the AC unit after changing settings
+6. **Remote Host Update Failed** - Verify the new server address is correct and accessible
+7. **Management Features Disabled** - Check `EnableManagement` setting in server configuration
+8. **"Device management is disabled" Error** - Server administrator has disabled management features via `EnableManagement: false`
 
 ### **Web UI Not Loading**
 1. **Check Port 5100** - Ensure it's not blocked by firewall
@@ -464,7 +552,6 @@ This project is licensed under the **GNU General Public License v3.0** - see the
 
 - **Original Project**: [GreeAC-DummyServer](https://github.com/emtek-at/GreeAC-DummyServer)
 - **Configuration Tool**: [GreeAC-ConfigTool](https://github.com/emtek-at/GreeAC-ConfigTool)
-- **GREE Protocol Documentation**: Included in the original repository
 
 ---
 

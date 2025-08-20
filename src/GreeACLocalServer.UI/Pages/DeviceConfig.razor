@@ -1,0 +1,504 @@
+@page "/device-config"
+@implements IDisposable
+@inject IDeviceConfigService DeviceConfigService
+@inject IDeviceManagerService DeviceManagerService
+@inject IConfigService ConfigService
+@inject ISnackbar Snackbar
+
+<PageTitle>Device Configuration</PageTitle>
+
+<MudText Typo="Typo.h4" GutterBottom="true">Device Configuration</MudText>
+<MudText Typo="Typo.body1" Class="mb-4">
+    Configure Gree AC devices by IP address. The device will be scanned automatically to obtain the required cryptographic keys.
+    @if (_loadingConfig)
+    {
+        <MudProgressCircular Class="ms-2" Size="Size.Small" Indeterminate="true" />
+    }
+    else if (_serverConfig?.EnableManagement == false)
+    {
+        <MudChip T="string" Icon="@Icons.Material.Filled.Lock" Color="Color.Warning" Size="Size.Small" Class="ms-2">Management Disabled</MudChip>
+    }
+</MudText>
+
+<MudGrid>
+    <MudItem xs="12" lg="6">
+        <MudPaper Class="pa-4 mb-4">
+            <MudText Typo="Typo.h6" Class="mb-4">Query Device Status</MudText>
+            <MudText Typo="Typo.body2" Class="mb-4">Retrieve the current name and remote host configuration of a device.</MudText>
+            
+            <EditForm Model="@_statusRequest" OnValidSubmit="@QueryDeviceStatus">
+                <DataAnnotationsValidator />
+                
+                <MudAutocomplete T="string" 
+                                 @bind-Value="@_statusRequest.IpAddress"
+                                 Label="Device IP Address"
+                                 Placeholder="Select or enter IP address"
+                                 SearchFunc="@SearchDeviceIpAddresses"
+                                 For="@(() => _statusRequest.IpAddress)"
+                                 Class="mb-4"
+                                 ShowProgressIndicator="@_loadingDevices"
+                                 Clearable="true"
+                                 ResetValueOnEmptyText="true"
+                                 CoerceValue="true"
+                                 AdornmentIcon="@Icons.Material.Filled.DeviceHub"
+                                 AdornmentColor="Color.Primary" />
+                              
+                <MudButton ButtonType="ButtonType.Submit" 
+                           Variant="Variant.Filled" 
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Search"
+                           Disabled="@_queryInProgress"
+                           FullWidth="true">
+                    @if (_queryInProgress)
+                    {
+                        <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                        <MudText Class="ms-2">Querying...</MudText>
+                    }
+                    else
+                    {
+                        <MudText>Query Status</MudText>
+                    }
+                </MudButton>
+            </EditForm>
+            
+            @if (_statusResponse != null)
+            {
+                <MudDivider Class="my-4" />
+                
+                @if (_statusResponse.Success)
+                {
+                    <MudAlert Severity="Severity.Success" Class="mb-4">Device status retrieved successfully</MudAlert>
+                    <MudSimpleTable Dense="true">
+                        <tbody>
+                            <tr>
+                                <td><strong>Device Name:</strong></td>
+                                <td>@(_statusResponse.DeviceName ?? "Not set")</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Remote Host:</strong></td>
+                                <td>@(_statusResponse.RemoteHost ?? "Not set")</td>
+                            </tr>
+                            <tr>
+                                <td><strong>MAC Address:</strong></td>
+                                <td>@DeviceHelpers.FormatMacAddress(_statusResponse.MacAddress)</td>
+                            </tr>
+                        </tbody>
+                    </MudSimpleTable>
+                }
+                else
+                {
+                    <MudAlert Severity="Severity.Error">
+                        <MudText><strong>Error:</strong> @_statusResponse.Message</MudText>
+                        @if (!string.IsNullOrEmpty(_statusResponse.ErrorCode))
+                        {
+                            <MudText Typo="Typo.caption" Class="mt-1">Error Code: @_statusResponse.ErrorCode</MudText>
+                        }
+                    </MudAlert>
+                }
+            }
+        </MudPaper>
+    </MudItem>
+
+    @if (_serverConfig?.EnableManagement == true)
+    {
+        <MudItem xs="12" lg="6">
+            <MudPaper Class="pa-4 mb-4">
+                <MudText Typo="Typo.h6" Class="mb-4">Set Device Name</MudText>
+                <MudText Typo="Typo.body2" Class="mb-4">Change the friendly name of the device.</MudText>
+            
+            <EditForm Model="@_setNameRequest" OnValidSubmit="@SetDeviceName">
+                <DataAnnotationsValidator />
+                
+                <MudAutocomplete T="string" 
+                                 @bind-Value="@_setNameRequest.IpAddress"
+                                 Label="Device IP Address"
+                                 Placeholder="Select or enter IP address"
+                                 SearchFunc="@SearchDeviceIpAddresses"
+                                 For="@(() => _setNameRequest.IpAddress)"
+                                 Class="mb-4"
+                                 ShowProgressIndicator="@_loadingDevices"
+                                 Clearable="true"
+                                 ResetValueOnEmptyText="true"
+                                 CoerceValue="true"
+                                 AdornmentIcon="@Icons.Material.Filled.DeviceHub"
+                                 AdornmentColor="Color.Primary" />
+                              
+                <MudTextField @bind-Value="@_setNameRequest.DeviceName" 
+                              Label="New Device Name"
+                              Placeholder="Living Room AC"
+                              For="@(() => _setNameRequest.DeviceName)"
+                              Class="mb-4" />
+                              
+                <MudButton ButtonType="ButtonType.Submit" 
+                           Variant="Variant.Filled" 
+                           Color="Color.Secondary"
+                           StartIcon="@Icons.Material.Filled.Edit"
+                           Disabled="@_setNameInProgress"
+                           FullWidth="true">
+                    @if (_setNameInProgress)
+                    {
+                        <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                        <MudText Class="ms-2">Setting Name...</MudText>
+                    }
+                    else
+                    {
+                        <MudText>Set Name</MudText>
+                    }
+                </MudButton>
+            </EditForm>
+            
+            @if (_setNameResponse != null)
+            {
+                <MudDivider Class="my-4" />
+                
+                @if (_setNameResponse.Success)
+                {
+                    <MudAlert Severity="Severity.Success">@_setNameResponse.Message</MudAlert>
+                }
+                else
+                {
+                    <MudAlert Severity="Severity.Error">
+                        <MudText><strong>Error:</strong> @_setNameResponse.Message</MudText>
+                        @if (!string.IsNullOrEmpty(_setNameResponse.ErrorCode))
+                        {
+                            <MudText Typo="Typo.caption" Class="mt-1">Error Code: @_setNameResponse.ErrorCode</MudText>
+                        }
+                    </MudAlert>
+                }
+            }
+        </MudPaper>
+    </MudItem>
+    }
+
+    @if (_serverConfig?.EnableManagement == true)
+    {
+        <MudItem xs="12" lg="6">
+            <MudPaper Class="pa-4 mb-4">
+                <MudText Typo="Typo.h6" Class="mb-4">Set Remote Host</MudText>
+                <MudText Typo="Typo.body2" Class="mb-4">Change the remote server that the device connects to. Power cycle the device after changing this setting.</MudText>
+            
+            <EditForm Model="@_setHostRequest" OnValidSubmit="@SetRemoteHost">
+                <DataAnnotationsValidator />
+                
+                <MudAutocomplete T="string" 
+                                 @bind-Value="@_setHostRequest.IpAddress"
+                                 Label="Device IP Address"
+                                 Placeholder="Select or enter IP address"
+                                 SearchFunc="@SearchDeviceIpAddresses"
+                                 For="@(() => _setHostRequest.IpAddress)"
+                                 Class="mb-4"
+                                 ShowProgressIndicator="@_loadingDevices"
+                                 Clearable="true"
+                                 ResetValueOnEmptyText="true"
+                                 CoerceValue="true"
+                                 AdornmentIcon="@Icons.Material.Filled.DeviceHub"
+                                 AdornmentColor="Color.Primary" />
+                              
+                <MudTextField @bind-Value="@_setHostRequest.RemoteHost" 
+                              Label="New Remote Host"
+                              Placeholder="gree.local.home"
+                              For="@(() => _setHostRequest.RemoteHost)"
+                              Class="mb-4" />
+                              
+                <MudButton ButtonType="ButtonType.Submit" 
+                           Variant="Variant.Filled" 
+                           Color="Color.Tertiary"
+                           StartIcon="@Icons.Material.Filled.Router"
+                           Disabled="@_setHostInProgress"
+                           FullWidth="true">
+                    @if (_setHostInProgress)
+                    {
+                        <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                        <MudText Class="ms-2">Setting Host...</MudText>
+                    }
+                    else
+                    {
+                        <MudText>Set Remote Host</MudText>
+                    }
+                </MudButton>
+            </EditForm>
+            
+            @if (_setHostResponse != null)
+            {
+                <MudDivider Class="my-4" />
+                
+                @if (_setHostResponse.Success)
+                {
+                    <MudAlert Severity="Severity.Success">
+                        @_setHostResponse.Message
+                        <MudText Typo="Typo.caption" Class="mt-2">
+                            <strong>Important:</strong> Power off and on the device to activate the new setting.
+                        </MudText>
+                    </MudAlert>
+                }
+                else
+                {
+                    <MudAlert Severity="Severity.Error">
+                        <MudText><strong>Error:</strong> @_setHostResponse.Message</MudText>
+                        @if (!string.IsNullOrEmpty(_setHostResponse.ErrorCode))
+                        {
+                            <MudText Typo="Typo.caption" Class="mt-1">Error Code: @_setHostResponse.ErrorCode</MudText>
+                        }
+                    </MudAlert>
+                }
+            }
+        </MudPaper>
+    </MudItem>
+    }
+
+    <MudItem xs="12" lg="6">
+        <MudPaper Class="pa-4">
+            <MudText Typo="Typo.h6" Class="mb-4">Usage Notes</MudText>
+            <MudList T="string" Dense="true">
+                <MudListItem T="string" Icon="@Icons.Material.Filled.Info">
+                    <MudText Typo="Typo.body2">Select a device from the dropdown or enter an IP address manually.</MudText>
+                </MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.Search">
+                    <MudText Typo="Typo.body2">The autocomplete shows known devices that have connected to this server.</MudText>
+                </MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.Security">
+                    <MudText Typo="Typo.body2">The device will be scanned and bound automatically to obtain crypto keys.</MudText>
+                </MudListItem>
+                @if (_serverConfig?.EnableManagement == true)
+                {
+                    <MudListItem T="string" Icon="@Icons.Material.Filled.PowerSettingsNew">
+                        <MudText Typo="Typo.body2">After changing the remote host, power cycle the device to apply changes.</MudText>
+                    </MudListItem>
+                }
+                else
+                {
+                    <MudListItem T="string" Icon="@Icons.Material.Filled.Lock" IconColor="Color.Warning">
+                        <MudText Typo="Typo.body2" Color="Color.Warning">Device management features are disabled on this server.</MudText>
+                    </MudListItem>
+                }
+                <MudListItem T="string" Icon="@Icons.Material.Filled.Warning">
+                    <MudText Typo="Typo.body2">Ensure the device is on the same network and accessible via UDP port 7000.</MudText>
+                </MudListItem>
+            </MudList>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private readonly DeviceStatusRequest _statusRequest = new();
+    private readonly SetDeviceNameRequest _setNameRequest = new();
+    private readonly SetRemoteHostRequest _setHostRequest = new();
+
+    private DeviceStatusResponse? _statusResponse;
+    private DeviceOperationResponse? _setNameResponse;
+    private DeviceOperationResponse? _setHostResponse;
+    private ServerConfigResponse? _serverConfig;
+
+    private bool _queryInProgress = false;
+    private bool _setNameInProgress = false;
+    private bool _setHostInProgress = false;
+    private bool _loadingDevices = false;
+    private bool _loadingConfig = false;
+
+    private CancellationTokenSource _cancellationTokenSource = new();
+    private List<DeviceDto> _availableDevices = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Task.WhenAll(
+            LoadAvailableDevicesAsync(),
+            LoadServerConfigAsync()
+        );
+    }
+
+    private async Task LoadServerConfigAsync()
+    {
+        try
+        {
+            _loadingConfig = true;
+            StateHasChanged();
+
+            _serverConfig = await ConfigService.GetServerConfigAsync(_cancellationTokenSource.Token);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load server configuration: {ex.Message}", Severity.Warning);
+            // Set default config if loading fails
+            _serverConfig = new ServerConfigResponse
+            {
+                EnableManagement = false,
+                EnableUI = true
+            };
+        }
+        finally
+        {
+            _loadingConfig = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadAvailableDevicesAsync()
+    {
+        try
+        {
+            _loadingDevices = true;
+            StateHasChanged();
+
+            _availableDevices = (await DeviceManagerService.GetAllDeviceStatesAsync()).ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load available devices: {ex.Message}", Severity.Warning);
+        }
+        finally
+        {
+            _loadingDevices = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task<IEnumerable<string>> SearchDeviceIpAddresses(string value, CancellationToken cancellationToken)
+    {
+        // Refresh devices list if empty or if needed
+        if (!_availableDevices.Any() && !_loadingDevices)
+        {
+            await LoadAvailableDevicesAsync();
+        }
+
+        // If no search value, return all IP addresses
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return _availableDevices.Select(d => d.IpAddress).Distinct().OrderBy(ip => ip);
+        }
+
+        // Filter IP addresses based on search value
+        var searchValue = value.Trim().ToLowerInvariant();
+        return _availableDevices
+            .Where(d => d.IpAddress.ToLowerInvariant().Contains(searchValue) || 
+                       (!string.IsNullOrEmpty(d.DNSName) && d.DNSName.ToLowerInvariant().Contains(searchValue)))
+            .Select(d => d.IpAddress)
+            .Distinct()
+            .OrderBy(ip => ip);
+    }
+
+    private async Task QueryDeviceStatus()
+    {
+        if (_queryInProgress) return;
+        
+        _queryInProgress = true;
+        _statusResponse = null;
+        StateHasChanged();
+
+        try
+        {
+            _statusResponse = await DeviceConfigService.QueryDeviceStatusAsync(_statusRequest, _cancellationTokenSource.Token);
+            
+            if (_statusResponse.Success)
+            {
+                Snackbar.Add("Device status retrieved successfully!", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add($"Failed to query device status: {_statusResponse.Message}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            _statusResponse = new DeviceStatusResponse
+            {
+                Success = false,
+                Message = ex.Message,
+                ErrorCode = "EXCEPTION"
+            };
+            Snackbar.Add($"Error querying device: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _queryInProgress = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SetDeviceName()
+    {
+        if (_setNameInProgress) return;
+        
+        _setNameInProgress = true;
+        _setNameResponse = null;
+        StateHasChanged();
+
+        try
+        {
+            _setNameResponse = await DeviceConfigService.SetDeviceNameAsync(_setNameRequest, _cancellationTokenSource.Token);
+            
+            if (_setNameResponse.Success)
+            {
+                Snackbar.Add("Device name set successfully!", Severity.Success);
+                // Clear the form
+                _setNameRequest.IpAddress = string.Empty;
+                _setNameRequest.DeviceName = string.Empty;
+            }
+            else
+            {
+                Snackbar.Add($"Failed to set device name: {_setNameResponse.Message}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            _setNameResponse = new DeviceOperationResponse
+            {
+                Success = false,
+                Message = ex.Message,
+                ErrorCode = "EXCEPTION"
+            };
+            Snackbar.Add($"Error setting device name: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _setNameInProgress = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SetRemoteHost()
+    {
+        if (_setHostInProgress) return;
+        
+        _setHostInProgress = true;
+        _setHostResponse = null;
+        StateHasChanged();
+
+        try
+        {
+            _setHostResponse = await DeviceConfigService.SetRemoteHostAsync(_setHostRequest, _cancellationTokenSource.Token);
+            
+            if (_setHostResponse.Success)
+            {
+                Snackbar.Add("Remote host set successfully! Remember to power cycle the device.", Severity.Success);
+                // Clear the form
+                _setHostRequest.IpAddress = string.Empty;
+                _setHostRequest.RemoteHost = string.Empty;
+            }
+            else
+            {
+                Snackbar.Add($"Failed to set remote host: {_setHostResponse.Message}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            _setHostResponse = new DeviceOperationResponse
+            {
+                Success = false,
+                Message = ex.Message,
+                ErrorCode = "EXCEPTION"
+            };
+            Snackbar.Add($"Error setting remote host: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _setHostInProgress = false;
+            StateHasChanged();
+        }
+    }
+
+    public void Dispose()
+    {
+        _cancellationTokenSource?.Cancel();
+        _cancellationTokenSource?.Dispose();
+    }
+}

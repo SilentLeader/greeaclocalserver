@@ -1,6 +1,4 @@
-using GreeACLocalServer.Shared.Interfaces;
-
-namespace GreeACLocalServer.Api.Services;
+namespace GreeACLocalServer.Api.Interfaces;
 
 public interface IInternalDeviceManagerService: IDeviceManagerService
 {

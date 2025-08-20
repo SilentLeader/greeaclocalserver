@@ -1,20 +1,28 @@
-using System.IO;
 using System.Security.Cryptography;
 using System.Text;
-using Microsoft.Extensions.Options;
-using GreeACLocalServer.Api.Options;
 
 namespace GreeACLocalServer.Api.Services;
 
-public class CryptoService(IOptions<ServerOptions> options)
+public class CryptoService(IOptions<ServerOptions> options) : ICryptoService
 {
-    private readonly string _cryptoKey = options.Value.CryptoKey ?? throw new InvalidOperationException("ServerOptions:CryptoKey must be configured.");
+    private readonly string _cryptoKey = string.IsNullOrEmpty(options.Value.CryptoKey) ? throw new InvalidOperationException("ServerOptions:CryptoKey must be configured.") : options.Value.CryptoKey;
 
-    public string Decrypt(string pack)
+    /// <summary>
+    /// Decrypt with a custom key (used for device communication)
+    /// </summary>
+    /// <param name="pack">Base64 encoded encrypted data</param>
+    /// <param name="key">Encryption key to use (uses default device key if empty)</param>
+    /// <returns>Decrypted plaintext</returns>
+    public string Decrypt(string pack, string? key = null)
     {
+        if (string.IsNullOrEmpty(key))
+        {
+            key = _cryptoKey;
+        }
+
         using var myaes = Aes.Create();
         myaes.Mode = CipherMode.ECB;
-        myaes.Key = Encoding.UTF8.GetBytes(_cryptoKey);
+        myaes.Key = Encoding.UTF8.GetBytes(key);
         myaes.Padding = PaddingMode.PKCS7;
         myaes.GenerateIV();
 
@@ -22,15 +30,26 @@ public class CryptoService(IOptions<ServerOptions> options)
         using var msDecrypt = new MemoryStream(Convert.FromBase64String(pack));
         using var csDecrypt = new CryptoStream(msDecrypt, decryptor, CryptoStreamMode.Read);
         using var srDecrypt = new StreamReader(csDecrypt);
-        var plaintext = srDecrypt.ReadToEnd();
-        return plaintext;
+        return srDecrypt.ReadToEnd();
     }
 
-    public string Encrypt(string pack)
+    /// <summary>
+    /// Encrypt with a custom key (used for device communication)
+    /// </summary>
+    /// <param name="pack">Plaintext data to encrypt</param>
+    /// <param name="key">Encryption key to use (uses default device key if empty)</param>
+    /// <returns>Base64 encoded encrypted data</returns>
+    public string Encrypt(string pack, string? key = null)
     {
+        if (string.IsNullOrEmpty(key))
+        {
+            key = _cryptoKey;
+        }
+
+
         using var myaes = Aes.Create();
         myaes.Mode = CipherMode.ECB;
-        myaes.Key = Encoding.UTF8.GetBytes(_cryptoKey);
+        myaes.Key = Encoding.UTF8.GetBytes(key);
         myaes.Padding = PaddingMode.PKCS7;
         myaes.GenerateIV();
 
@@ -42,8 +61,6 @@ public class CryptoService(IOptions<ServerOptions> options)
         swEncrypt.Flush();
         swEncrypt.Close();
         msEncrypt.Flush();
-        var encrypted = Convert.ToBase64String(msEncrypt.ToArray());
-
-        return encrypted;
+        return Convert.ToBase64String(msEncrypt.ToArray());
     }
 }

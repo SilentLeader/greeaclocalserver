@@ -1,30 +1,15 @@
-﻿using System.Threading.Tasks;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Configuration;
-using GreeACLocalServer.Api.Services;
-using GreeACLocalServer.Api.Options;
-using Serilog;
-using Microsoft.Extensions.Hosting.Systemd;
-using Microsoft.Extensions.Hosting.WindowsServices;
-using System;
-using GreeACLocalServer.UI;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Components;
-using Microsoft.AspNetCore.Components.Web;
-using GreeACLocalServer.Api.Components;
-using GreeACLocalServer.Shared.Contracts;
-using GreeACLocalServer.Shared.Interfaces;
+﻿using GreeACLocalServer.Api.Components;
 using GreeACLocalServer.Api.Hubs;
+using GreeACLocalServer.Api.Services;
+using Microsoft.AspNetCore.Mvc;
 using MudBlazor.Services;
-using Microsoft.AspNetCore.HttpOverrides;
-using System.Net;
+using Serilog;
 
 namespace GreeACLocalServer.Api
 {
-    class Program
+    internal static class Program
     {
-        static async Task Main(string[] args)
+        private static async Task Main(string[] args)
         {
             var configBuilder = new ConfigurationBuilder();
             SetupConfig(configBuilder);
@@ -132,10 +117,12 @@ namespace GreeACLocalServer.Api
         private static void ConfigureCommonServices(IServiceCollection services, IConfiguration configuration)
         {
             // Core services needed in both scenarios
-            services.AddSingleton<CryptoService>();
+            services.AddSingleton<ICryptoService, CryptoService>();
             services.AddSingleton<MessageHandlerService>();
             services.AddSingleton<IDnsResolverService, DnsResolverService>();
             services.AddSingleton<SocketHandlerService>();
+            services.AddScoped<IDeviceConfigService, DeviceConfigService>();
+            services.AddScoped<IConfigService, ConfigService>();
             
             // Configuration options
             services.Configure<ServerOptions>(configuration.GetSection("Server"));
@@ -218,6 +205,32 @@ namespace GreeACLocalServer.Api
                 return device is null
                     ? Results.NotFound()
                     : Results.Ok(device);
+            });
+            
+            // Device configuration endpoints
+            var deviceConfig = api.MapGroup("/device-config");
+            deviceConfig.MapPost("/status", async ([FromBody] DeviceStatusRequest request, IDeviceConfigService configService) =>
+            {
+                var result = await configService.QueryDeviceStatusAsync(request);
+                return Results.Ok(result);
+            });
+            deviceConfig.MapPost("/set-name", async ([FromBody] SetDeviceNameRequest request, IDeviceConfigService configService) =>
+            {
+                var result = await configService.SetDeviceNameAsync(request);
+                return Results.Ok(result);
+            });
+            deviceConfig.MapPost("/set-remote-host", async ([FromBody] SetRemoteHostRequest request, IDeviceConfigService configService) =>
+            {
+                var result = await configService.SetRemoteHostAsync(request);
+                return Results.Ok(result);
+            });
+
+            // Server configuration endpoints
+            var config = api.MapGroup("/config");
+            config.MapGet("/server", async (IConfigService configService) =>
+            {
+                var result = await configService.GetServerConfigAsync();
+                return Results.Ok(result);
             });
 
             // Map SignalR hubs                    
