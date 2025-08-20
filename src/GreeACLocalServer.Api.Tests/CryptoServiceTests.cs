@@ -40,15 +40,8 @@ public class CryptoServiceTests
         var serverOptions = new ServerOptions { CryptoKey = "" };
         var options = Mock.Of<IOptions<ServerOptions>>(o => o.Value == serverOptions);
 
-        // Act - Constructor doesn't validate empty key, but encryption/decryption might fail
-        var service = new CryptoService(options);
-
-        // Assert - Service is created but operations may fail
-        Assert.NotNull(service);
-        
-        // Encryption with empty key might work with fallback to default key
-        var result = service.Encrypt("test");
-        Assert.NotNull(result);
+        // Act & Assert
+        Assert.Throws<InvalidOperationException>(() => new CryptoService(options));
     }
 
     [Theory]
@@ -85,21 +78,6 @@ public class CryptoServiceTests
     }
 
     [Fact]
-    public void EncryptDecrypt_WithDeviceDefaultKey_ReturnsOriginalText()
-    {
-        // Arrange
-        var plaintext = "Device communication test";
-        var deviceKey = "a3K8Bx%2r8Y7#xDh"; // Known device key
-
-        // Act
-        var encrypted = _cryptoService.Encrypt(plaintext, deviceKey);
-        var decrypted = _cryptoService.Decrypt(encrypted, deviceKey);
-
-        // Assert
-        Assert.Equal(plaintext, decrypted);
-    }
-
-    [Fact]
     public void EncryptDecrypt_WithEmptyKey_UsesDeviceDefaultKey()
     {
         // Arrange
@@ -107,10 +85,10 @@ public class CryptoServiceTests
 
         // Act
         var encryptedWithEmpty = _cryptoService.Encrypt(plaintext, "");
-        var encryptedWithDefault = _cryptoService.Encrypt(plaintext, "a3K8Bx%2r8Y7#xDh");
+        var encryptedWithDefault = _cryptoService.Encrypt(plaintext, _testCryptoKey);
         
         var decryptedWithEmpty = _cryptoService.Decrypt(encryptedWithEmpty, "");
-        var decryptedWithDefault = _cryptoService.Decrypt(encryptedWithDefault, "a3K8Bx%2r8Y7#xDh");
+        var decryptedWithDefault = _cryptoService.Decrypt(encryptedWithDefault, _testCryptoKey);
 
         // Assert
         Assert.Equal(plaintext, decryptedWithEmpty);

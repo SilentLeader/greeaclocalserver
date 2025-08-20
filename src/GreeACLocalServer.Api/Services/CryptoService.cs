@@ -1,27 +1,11 @@
-using System.IO;
 using System.Security.Cryptography;
 using System.Text;
-using Microsoft.Extensions.Options;
-using GreeACLocalServer.Api.Options;
 
 namespace GreeACLocalServer.Api.Services;
 
-public class CryptoService(IOptions<ServerOptions> options)
+public class CryptoService(IOptions<ServerOptions> options) : ICryptoService
 {
-    private readonly string _cryptoKey = options.Value.CryptoKey ?? throw new InvalidOperationException("ServerOptions:CryptoKey must be configured.");
-    
-    // Default device crypto key from GreeAC-ConfigTool
-    private const string DefaultDeviceKey = "a3K8Bx%2r8Y7#xDh";
-
-    public string Decrypt(string pack)
-    {
-        return Decrypt(pack, _cryptoKey);
-    }
-
-    public string Encrypt(string pack)
-    {
-        return Encrypt(pack, _cryptoKey);
-    }
+    private readonly string _cryptoKey = string.IsNullOrEmpty(options.Value.CryptoKey) ? throw new InvalidOperationException("ServerOptions:CryptoKey must be configured.") : options.Value.CryptoKey;
 
     /// <summary>
     /// Decrypt with a custom key (used for device communication)
@@ -29,10 +13,10 @@ public class CryptoService(IOptions<ServerOptions> options)
     /// <param name="pack">Base64 encoded encrypted data</param>
     /// <param name="key">Encryption key to use (uses default device key if empty)</param>
     /// <returns>Decrypted plaintext</returns>
-    public string Decrypt(string pack, string key)
+    public string Decrypt(string pack, string? key = null)
     {
         if (string.IsNullOrEmpty(key))
-            key = DefaultDeviceKey;
+            key = _cryptoKey;
 
         using var myaes = Aes.Create();
         myaes.Mode = CipherMode.ECB;
@@ -54,10 +38,10 @@ public class CryptoService(IOptions<ServerOptions> options)
     /// <param name="pack">Plaintext data to encrypt</param>
     /// <param name="key">Encryption key to use (uses default device key if empty)</param>
     /// <returns>Base64 encoded encrypted data</returns>
-    public string Encrypt(string pack, string key)
+    public string Encrypt(string pack, string? key = null)
     {
         if (string.IsNullOrEmpty(key))
-            key = DefaultDeviceKey;
+            key = _cryptoKey;
 
         using var myaes = Aes.Create();
         myaes.Mode = CipherMode.ECB;

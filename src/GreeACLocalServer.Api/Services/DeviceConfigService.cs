@@ -1,23 +1,16 @@
-using System;
-using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
-using GreeACLocalServer.Shared.DTOs;
-using GreeACLocalServer.Shared.Interfaces;
 
 namespace GreeACLocalServer.Api.Services;
 
 public class DeviceConfigService : IDeviceConfigService
 {
     private readonly ILogger<DeviceConfigService> _logger;
-    private readonly CryptoService _cryptoService;
+    private readonly ICryptoService _cryptoService;
 
-    public DeviceConfigService(ILogger<DeviceConfigService> logger, CryptoService cryptoService)
+    public DeviceConfigService(ILogger<DeviceConfigService> logger, ICryptoService cryptoService)
     {
         _logger = logger;
         _cryptoService = cryptoService;

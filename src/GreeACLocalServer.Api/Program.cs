@@ -134,7 +134,7 @@ namespace GreeACLocalServer.Api
         private static void ConfigureCommonServices(IServiceCollection services, IConfiguration configuration)
         {
             // Core services needed in both scenarios
-            services.AddSingleton<CryptoService>();
+            services.AddSingleton<ICryptoService, CryptoService>();
             services.AddSingleton<MessageHandlerService>();
             services.AddSingleton<IDnsResolverService, DnsResolverService>();
             services.AddSingleton<SocketHandlerService>();
