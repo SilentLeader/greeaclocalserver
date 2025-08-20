@@ -8,6 +8,8 @@ using GreeACLocalServer.Api.Responses;
 using GreeACLocalServer.Api.Request;
 using System.Globalization;
 
+namespace GreeACLocalServer.Api.Tests;
+
 public class MessageHandlerServiceTests
 {
     private MessageHandlerService CreateService(
