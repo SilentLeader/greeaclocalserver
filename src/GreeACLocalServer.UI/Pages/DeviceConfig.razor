@@ -2,12 +2,23 @@
 @implements IDisposable
 @inject IDeviceConfigService DeviceConfigService
 @inject IDeviceManagerService DeviceManagerService
+@inject IConfigService ConfigService
 @inject ISnackbar Snackbar
 
 <PageTitle>Device Configuration</PageTitle>
 
 <MudText Typo="Typo.h4" GutterBottom="true">Device Configuration</MudText>
-<MudText Typo="Typo.body1" Class="mb-4">Configure Gree AC devices by IP address. The device will be scanned automatically to obtain the required cryptographic keys.</MudText>
+<MudText Typo="Typo.body1" Class="mb-4">
+    Configure Gree AC devices by IP address. The device will be scanned automatically to obtain the required cryptographic keys.
+    @if (_loadingConfig)
+    {
+        <MudProgressCircular Class="ms-2" Size="Size.Small" Indeterminate="true" />
+    }
+    else if (_serverConfig?.EnableManagement == false)
+    {
+        <MudChip T="string" Icon="@Icons.Material.Filled.Lock" Color="Color.Warning" Size="Size.Small" Class="ms-2">Management Disabled</MudChip>
+    }
+</MudText>
 
 <MudGrid>
     <MudItem xs="12" lg="6">
@@ -88,10 +99,12 @@
         </MudPaper>
     </MudItem>
 
-    <MudItem xs="12" lg="6">
-        <MudPaper Class="pa-4 mb-4">
-            <MudText Typo="Typo.h6" Class="mb-4">Set Device Name</MudText>
-            <MudText Typo="Typo.body2" Class="mb-4">Change the friendly name of the device.</MudText>
+    @if (_serverConfig?.EnableManagement == true)
+    {
+        <MudItem xs="12" lg="6">
+            <MudPaper Class="pa-4 mb-4">
+                <MudText Typo="Typo.h6" Class="mb-4">Set Device Name</MudText>
+                <MudText Typo="Typo.body2" Class="mb-4">Change the friendly name of the device.</MudText>
             
             <EditForm Model="@_setNameRequest" OnValidSubmit="@SetDeviceName">
                 <DataAnnotationsValidator />
@@ -155,11 +168,14 @@
             }
         </MudPaper>
     </MudItem>
+    }
 
-    <MudItem xs="12" lg="6">
-        <MudPaper Class="pa-4 mb-4">
-            <MudText Typo="Typo.h6" Class="mb-4">Set Remote Host</MudText>
-            <MudText Typo="Typo.body2" Class="mb-4">Change the remote server that the device connects to. Power cycle the device after changing this setting.</MudText>
+    @if (_serverConfig?.EnableManagement == true)
+    {
+        <MudItem xs="12" lg="6">
+            <MudPaper Class="pa-4 mb-4">
+                <MudText Typo="Typo.h6" Class="mb-4">Set Remote Host</MudText>
+                <MudText Typo="Typo.body2" Class="mb-4">Change the remote server that the device connects to. Power cycle the device after changing this setting.</MudText>
             
             <EditForm Model="@_setHostRequest" OnValidSubmit="@SetRemoteHost">
                 <DataAnnotationsValidator />
@@ -228,6 +244,7 @@
             }
         </MudPaper>
     </MudItem>
+    }
 
     <MudItem xs="12" lg="6">
         <MudPaper Class="pa-4">
@@ -242,9 +259,18 @@
                 <MudListItem T="string" Icon="@Icons.Material.Filled.Security">
                     <MudText Typo="Typo.body2">The device will be scanned and bound automatically to obtain crypto keys.</MudText>
                 </MudListItem>
-                <MudListItem T="string" Icon="@Icons.Material.Filled.PowerSettingsNew">
-                    <MudText Typo="Typo.body2">After changing the remote host, power cycle the device to apply changes.</MudText>
-                </MudListItem>
+                @if (_serverConfig?.EnableManagement == true)
+                {
+                    <MudListItem T="string" Icon="@Icons.Material.Filled.PowerSettingsNew">
+                        <MudText Typo="Typo.body2">After changing the remote host, power cycle the device to apply changes.</MudText>
+                    </MudListItem>
+                }
+                else
+                {
+                    <MudListItem T="string" Icon="@Icons.Material.Filled.Lock" IconColor="Color.Warning">
+                        <MudText Typo="Typo.body2" Color="Color.Warning">Device management features are disabled on this server.</MudText>
+                    </MudListItem>
+                }
                 <MudListItem T="string" Icon="@Icons.Material.Filled.Warning">
                     <MudText Typo="Typo.body2">Ensure the device is on the same network and accessible via UDP port 7000.</MudText>
                 </MudListItem>
@@ -261,18 +287,49 @@
     private DeviceStatusResponse? _statusResponse;
     private DeviceOperationResponse? _setNameResponse;
     private DeviceOperationResponse? _setHostResponse;
+    private ServerConfigResponse? _serverConfig;
 
     private bool _queryInProgress = false;
     private bool _setNameInProgress = false;
     private bool _setHostInProgress = false;
     private bool _loadingDevices = false;
+    private bool _loadingConfig = false;
 
     private CancellationTokenSource _cancellationTokenSource = new();
     private List<DeviceDto> _availableDevices = new();
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadAvailableDevicesAsync();
+        await Task.WhenAll(
+            LoadAvailableDevicesAsync(),
+            LoadServerConfigAsync()
+        );
+    }
+
+    private async Task LoadServerConfigAsync()
+    {
+        try
+        {
+            _loadingConfig = true;
+            StateHasChanged();
+
+            _serverConfig = await ConfigService.GetServerConfigAsync(_cancellationTokenSource.Token);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load server configuration: {ex.Message}", Severity.Warning);
+            // Set default config if loading fails
+            _serverConfig = new ServerConfigResponse
+            {
+                EnableManagement = false,
+                EnableUI = true
+            };
+        }
+        finally
+        {
+            _loadingConfig = false;
+            StateHasChanged();
+        }
     }
 
     private async Task LoadAvailableDevicesAsync()

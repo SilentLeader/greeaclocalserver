@@ -2,6 +2,8 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
+using GreeACLocalServer.Api.Options;
+using Microsoft.Extensions.Options;
 
 namespace GreeACLocalServer.Api.Services;
 
@@ -9,11 +11,13 @@ public class DeviceConfigService : IDeviceConfigService
 {
     private readonly ILogger<DeviceConfigService> _logger;
     private readonly ICryptoService _cryptoService;
+    private readonly IOptionsMonitor<ServerOptions> _serverOptions;
 
-    public DeviceConfigService(ILogger<DeviceConfigService> logger, ICryptoService cryptoService)
+    public DeviceConfigService(ILogger<DeviceConfigService> logger, ICryptoService cryptoService, IOptionsMonitor<ServerOptions> serverOptions)
     {
         _logger = logger;
         _cryptoService = cryptoService;
+        _serverOptions = serverOptions;
     }
 
     public async Task<DeviceStatusResponse> QueryDeviceStatusAsync(DeviceStatusRequest request, CancellationToken cancellationToken = default)
@@ -52,6 +56,18 @@ public class DeviceConfigService : IDeviceConfigService
     {
         try
         {
+            // Check if management is enabled
+            if (!_serverOptions.CurrentValue.EnableManagement)
+            {
+                _logger.LogWarning("Device management is disabled. Set device name operation rejected for IP {IpAddress}", request.IpAddress);
+                return new DeviceOperationResponse
+                {
+                    Success = false,
+                    Message = "Device management is disabled",
+                    ErrorCode = "MANAGEMENT_DISABLED"
+                };
+            }
+
             // First, scan the device to get MAC and key
             var scanResult = await ScanDeviceAsync(request.IpAddress, cancellationToken);
             if (!scanResult.Success)
@@ -84,6 +100,18 @@ public class DeviceConfigService : IDeviceConfigService
     {
         try
         {
+            // Check if management is enabled
+            if (!_serverOptions.CurrentValue.EnableManagement)
+            {
+                _logger.LogWarning("Device management is disabled. Set remote host operation rejected for IP {IpAddress}", request.IpAddress);
+                return new DeviceOperationResponse
+                {
+                    Success = false,
+                    Message = "Device management is disabled",
+                    ErrorCode = "MANAGEMENT_DISABLED"
+                };
+            }
+
             // First, scan the device to get MAC and key
             var scanResult = await ScanDeviceAsync(request.IpAddress, cancellationToken);
             if (!scanResult.Success)

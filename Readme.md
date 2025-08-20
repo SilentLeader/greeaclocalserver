@@ -22,6 +22,7 @@ This project provides a **modern, feature-rich local replacement server for GREE
 - **Real-time Device Monitoring** via SignalR
 - **Device Dashboard** showing MAC addresses, IP addresses, DNS names, and connection status
 - **Built-in Device Configuration Tool** for managing AC settings without external tools
+- **Management Control** - Device configuration features can be disabled for security
 - **Responsive Design** optimized for desktop and mobile
 
 ### **Advanced Device Management**
@@ -70,6 +71,7 @@ docker run -d \
   -e Server__DomainName=gree.example.com \
   -e Server__ExternalIp=192.168.1.100 \
   -e Server__EnableUI=true \
+  -e Server__EnableManagement=true \
   -p 5000:5000 \
   -p 5100:5100 \
   gree-ac-local-server:latest
@@ -254,7 +256,8 @@ The application is configured via `appsettings.json`. Here are the key settings:
     "ExternalIp": "192.168.1.100",   // IP address of your server
     "ListenIPAddresses": [],          // Specific IPs to bind to (empty = all)
     "CryptoKey": "a3K8Bx%2r8Y7#xDh", // GREE encryption key (default works)
-    "EnableUI": true                  // Enable/disable web interface
+    "EnableUI": true,                 // Enable/disable web interface
+    "EnableManagement": true          // Enable/disable device management features
   }
 }
 ```
@@ -281,6 +284,20 @@ The application is configured via `appsettings.json`. Here are the key settings:
 - **Use Cases**: 
   - Set to `false` for headless/embedded deployments
   - Set to `true` for monitoring and management
+
+#### **`EnableManagement`**
+- **Purpose**: Controls whether device management features are available
+- **Values**: 
+  - `true` - Device configuration features enabled (default)
+  - `false` - Device management operations disabled
+- **Affects**:
+  - **API Endpoints**: `/device-config/set-name` and `/device-config/set-remote-host` return errors when disabled
+  - **Web UI**: Management sections (Set Device Name, Set Remote Host) are hidden when disabled
+  - **Query Operations**: Device status queries (`/device-config/status`) remain available regardless of this setting
+- **Use Cases**: 
+  - Set to `false` for read-only deployments or security-conscious environments
+  - Set to `true` when device configuration changes are needed
+- **Security**: Provides an additional layer of protection against unauthorized device configuration changes
 
 ### **Additional Configuration**
 ```json
@@ -329,6 +346,7 @@ The server now includes a **built-in web-based device configuration tool** acces
 - **Autocomplete IP Selection** - Choose from known devices or enter IP manually
 - **Automatic Device Discovery** - Scans and binds devices automatically
 - **Real-time Feedback** - Immediate success/error notifications
+- **Management Control** - Configuration features can be disabled server-wide for security
 
 #### **How to Use**
 1. **Access the tool** at `http://your-server:5100/device-config`
@@ -379,7 +397,31 @@ Access the web interface at: `http://your-server-ip:5100`
 - **Last Seen** - Timestamp of last communication
 - **Status** - Online/Offline indicator
 
-## 🔧 **Troubleshooting**
+## � **API Endpoints**
+
+The server exposes RESTful API endpoints for programmatic access:
+
+### **Configuration API**
+- **GET `/api/config/server`** - Retrieve server configuration settings
+  ```json
+  {
+    "enableManagement": true,
+    "enableUI": true
+  }
+  ```
+
+### **Device Configuration API**
+- **POST `/api/device-config/status`** - Query device status (always available)
+- **POST `/api/device-config/set-name`** - Set device name (requires `EnableManagement: true`)
+- **POST `/api/device-config/set-remote-host`** - Configure remote host (requires `EnableManagement: true`)
+
+### **Device Management API**
+- **GET `/api/devices`** - List all known devices
+- **GET `/api/devices/{mac}`** - Get specific device by MAC address
+
+**Note**: Management endpoints return HTTP 200 with error response when `EnableManagement` is disabled.
+
+## �🔧 **Troubleshooting**
 
 ### **Devices Not Connecting**
 1. **Verify DNS Setup** - Ensure domain points to correct IP
@@ -394,6 +436,8 @@ Access the web interface at: `http://your-server-ip:5100`
 4. **IP Address Not Listed** - Only devices that have connected appear in autocomplete
 5. **Name Change Not Applied** - Power cycle the AC unit after changing settings
 6. **Remote Host Update Failed** - Verify the new server address is correct and accessible
+7. **Management Features Disabled** - Check `EnableManagement` setting in server configuration
+8. **"Device management is disabled" Error** - Server administrator has disabled management features via `EnableManagement: false`
 
 ### **Web UI Not Loading**
 1. **Check Port 5100** - Ensure it's not blocked by firewall

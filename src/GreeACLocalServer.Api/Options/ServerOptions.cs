@@ -10,5 +10,6 @@ namespace GreeACLocalServer.Api.Options
         public List<string> ListenIPAddresses { get; set; } = new();
         public string? CryptoKey { get; set; }
         public bool EnableUI { get; set; } = true;
+        public bool EnableManagement { get; set; } = true;
     }
 }
