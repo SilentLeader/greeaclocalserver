@@ -1,6 +1,8 @@
 @page "/wifi-config"
 @inject ISnackbar Snackbar
 @inject IJSRuntime JSRuntime
+@inject IBrowserDetectionService BrowserDetection
+@using GreeACLocalServer.UI.Services
 
 <PageTitle>WiFi Configuration</PageTitle>
 
@@ -47,7 +49,8 @@
                 <MudSelect @bind-Value="_selectedOs" 
                           Label="Operating System" 
                           Variant="Variant.Outlined" 
-                          FullWidth="true">
+                          FullWidth="true"
+                          HelperText="@_osDetectionMessage">
                     <MudSelectItem Value="@("linux")">Linux</MudSelectItem>
                     <MudSelectItem Value="@("macos")">macOS</MudSelectItem>
                     <MudSelectItem Value="@("windows-wsl")">Windows (WSL)</MudSelectItem>
@@ -136,6 +139,35 @@
     private string _wifiPassword = string.Empty;
     private string _selectedOs = "linux";
     private bool _showPassword = false;
+    private string _osDetectionMessage = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await DetectOperatingSystem();
+    }
+
+    private async Task DetectOperatingSystem()
+    {
+        try
+        {
+            var detectedOs = await BrowserDetection.DetectOperatingSystemAsync();
+            _selectedOs = detectedOs;
+
+            // Set appropriate message based on detected OS
+            _osDetectionMessage = detectedOs switch
+            {
+                "windows-powershell" => "Auto-detected: Windows (PowerShell selected - no additional software needed)",
+                "macos" => "Auto-detected: macOS",
+                "linux" => "Auto-detected: Linux",
+                _ => "Could not detect OS - defaulted to Linux"
+            };
+        }
+        catch (Exception)
+        {
+            _selectedOs = "linux";
+            _osDetectionMessage = "OS detection unavailable - defaulted to Linux";
+        }
+    }
 
     private bool IsFormValid => 
         !string.IsNullOrWhiteSpace(_wifiSsid) && 
@@ -195,7 +227,7 @@
     {
         _wifiSsid = string.Empty;
         _wifiPassword = string.Empty;
-        _selectedOs = "linux";
+        // Don't reset OS selection to preserve auto-detection
         _showPassword = false;
         Snackbar.Add("Form cleared", Severity.Info);
     }

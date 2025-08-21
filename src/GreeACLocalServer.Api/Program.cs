@@ -166,6 +166,9 @@ namespace GreeACLocalServer.Api
             services.AddResponseCompression();
             services.AddMudServices();
             
+            // Register server-side browser detection service
+            services.AddScoped<IBrowserDetectionService, ServerBrowserDetectionService>();
+            
             services.AddRazorComponents()
                 .AddInteractiveServerComponents()
                 .AddInteractiveWebAssemblyComponents();
