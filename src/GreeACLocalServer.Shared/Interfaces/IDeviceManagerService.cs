@@ -9,4 +9,5 @@ public interface IDeviceManagerService
 {
     Task<IEnumerable<DeviceDto>> GetAllDeviceStatesAsync(CancellationToken cancellationToken = default);
     Task<DeviceDto?> GetAsync(string macAddress, CancellationToken cancellationToken = default);
+    Task<bool> RemoveDeviceAsync(string macAddress, CancellationToken cancellationToken = default);
 }

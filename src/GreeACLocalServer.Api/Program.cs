@@ -166,6 +166,9 @@ namespace GreeACLocalServer.Api
             services.AddResponseCompression();
             services.AddMudServices();
             
+            // Register server-side browser detection service
+            services.AddScoped<IBrowserDetectionService, ServerBrowserDetectionService>();
+            
             services.AddRazorComponents()
                 .AddInteractiveServerComponents()
                 .AddInteractiveWebAssemblyComponents();
@@ -205,6 +208,13 @@ namespace GreeACLocalServer.Api
                 return device is null
                     ? Results.NotFound()
                     : Results.Ok(device);
+            });
+            api.MapDelete("/devices/{mac}", async (string mac, IInternalDeviceManagerService dms) =>
+            {
+                var removed = await dms.RemoveDeviceAsync(mac);
+                return removed
+                    ? Results.Ok(new { Success = true, Message = $"Device {mac} removed successfully" })
+                    : Results.NotFound(new { Success = false, Message = $"Device {mac} not found" });
             });
             
             // Device configuration endpoints

@@ -1,0 +1,234 @@
+@page "/wifi-config"
+@inject ISnackbar Snackbar
+@inject IJSRuntime JSRuntime
+@inject IBrowserDetectionService BrowserDetection
+@using GreeACLocalServer.UI.Services
+
+<PageTitle>WiFi Configuration</PageTitle>
+
+<MudText Typo="Typo.h4" GutterBottom="true">AC WiFi Configuration</MudText>
+
+<MudCard>
+    <MudCardContent>
+        <MudText Typo="Typo.h6" Class="mb-4">Configure Your Air Conditioner WiFi</MudText>
+        
+        <MudAlert Severity="Severity.Info" Class="mb-4">
+            <MudText>
+                <strong>Before starting:</strong><br/>
+                1. Make sure your HVAC is running in AP mode<br/>
+                2. Reset WiFi config by pressing MODE + WIFI (or MODE + TURBO) on AC remote for 5 seconds<br/>
+                3. Connect to the AP network (SSID should be 8-character alphanumeric, e.g., "u34k5l166")<br/>
+                4. Use the form below to generate the configuration command
+            </MudText>
+        </MudAlert>
+
+        <MudGrid>
+            <MudItem xs="12" md="6">
+                <MudTextField @bind-Value="_wifiSsid" 
+                             Immediate="true"
+                             Label="WiFi SSID" 
+                             Variant="Variant.Outlined" 
+                             FullWidth="true"
+                             Required="true"
+                             HelperText="Enter your home WiFi network name" />
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudTextField @bind-Value="_wifiPassword" 
+                             Immediate="true"
+                             Label="WiFi Password" 
+                             Variant="Variant.Outlined" 
+                             FullWidth="true"
+                             Required="true"
+                             InputType="_showPassword ? InputType.Text : InputType.Password"
+                             Adornment="Adornment.End" 
+                             AdornmentIcon="@(_showPassword ? Icons.Material.Filled.Visibility : Icons.Material.Filled.VisibilityOff)" 
+                             OnAdornmentClick="TogglePasswordVisibility"
+                             HelperText="Enter your home WiFi password" />
+            </MudItem>
+            <MudItem xs="12">
+                <MudSelect @bind-Value="_selectedOs" 
+                          Label="Operating System" 
+                          Variant="Variant.Outlined" 
+                          FullWidth="true"
+                          HelperText="@_osDetectionMessage">
+                    <MudSelectItem Value="@("linux")">Linux</MudSelectItem>
+                    <MudSelectItem Value="@("macos")">macOS</MudSelectItem>
+                    <MudSelectItem Value="@("windows-wsl")">Windows (WSL)</MudSelectItem>
+                    <MudSelectItem Value="@("windows-powershell")">Windows (PowerShell)</MudSelectItem>
+                    <MudSelectItem Value="@("windows-ncat")">Windows (Nmap/ncat installed)</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+        </MudGrid>
+
+        <MudDivider Class="my-4" />
+
+        <MudText Typo="Typo.h6" Class="mb-3">Generated Command:</MudText>
+        
+        @if (IsFormValid)
+        {
+            <MudPaper Class="pa-4 mb-3" Style="background-color: var(--mud-palette-surface-variant);">
+                <MudText Typo="Typo.body2" Style="font-family: monospace; word-break: break-all;">
+                    @GetGeneratedCommand()
+                </MudText>
+            </MudPaper>
+            
+            <MudStack Row="true" Spacing="2">
+                <MudButton Variant="Variant.Filled" 
+                          Color="Color.Primary" 
+                          StartIcon="Icons.Material.Filled.ContentCopy"
+                          OnClick="CopyToClipboard">
+                    Copy Command
+                </MudButton>
+                
+                <MudButton Variant="Variant.Outlined" 
+                          Color="Color.Secondary" 
+                          StartIcon="Icons.Material.Filled.Refresh"
+                          OnClick="ClearForm">
+                    Clear Form
+                </MudButton>
+            </MudStack>
+        }
+        else
+        {
+            <MudAlert Severity="Severity.Warning">
+                Please fill in all required fields to generate the command.
+            </MudAlert>
+        }
+    </MudCardContent>
+</MudCard>
+
+<MudCard Class="mt-4">
+    <MudCardContent>
+        <MudText Typo="Typo.h6" Class="mb-3">Instructions</MudText>
+        
+        <MudText Typo="Typo.body1" Class="mb-2">
+            <strong>Step-by-step process:</strong>
+        </MudText>
+        
+        <MudList T="string">
+            <MudListItem T="string" Icon="Icons.Material.Filled.Wifi" Text="Ensure your AC is in AP mode (reset if needed)" />
+            <MudListItem T="string" Icon="Icons.Material.Filled.PhoneAndroid" Text="Connect your device to the AC's WiFi hotspot" />
+            <MudListItem T="string" Icon="Icons.Material.Filled.Terminal" Text="Open a terminal and run the generated command" />
+            <MudListItem T="string" Icon="Icons.Material.Filled.CheckCircle" Text="Wait for the AC to connect to your home WiFi" />
+            <MudListItem T="string" Icon="Icons.Material.Filled.Router" Text="The AC should now appear in your network devices" />
+        </MudList>
+
+        <MudAlert Severity="Severity.Warning" Class="mt-3">
+            <MudText>
+                <strong>Windows Users:</strong><br/>
+                • <strong>WSL:</strong> Use Windows Subsystem for Linux with netcat installed<br/>
+                • <strong>PowerShell:</strong> Uses built-in .NET networking (no additional software needed)<br/>
+                • <strong>Ncat:</strong> Install Nmap suite which includes ncat (netcat alternative)<br/>
+                • <strong>Alternative:</strong> Install netcat via Chocolatey: <code>choco install netcat</code>
+            </MudText>
+        </MudAlert>
+        
+        <MudAlert Severity="Severity.Info" Class="mt-3">
+            <MudText>
+                <strong>Installation Notes:</strong><br/>
+                • <strong>Linux:</strong> <code>sudo apt install netcat</code> (Ubuntu/Debian) or <code>sudo yum install nc</code> (RHEL/CentOS)<br/>
+                • <strong>macOS:</strong> <code>brew install netcat</code> (if not pre-installed)<br/>
+                • <strong>Windows:</strong> Use WSL, PowerShell command, or install Nmap/Chocolatey netcat
+            </MudText>
+        </MudAlert>
+    </MudCardContent>
+</MudCard>
+
+@code {
+    private string _wifiSsid = string.Empty;
+    private string _wifiPassword = string.Empty;
+    private string _selectedOs = "linux";
+    private bool _showPassword = false;
+    private string _osDetectionMessage = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await DetectOperatingSystem();
+    }
+
+    private async Task DetectOperatingSystem()
+    {
+        try
+        {
+            var detectedOs = await BrowserDetection.DetectOperatingSystemAsync();
+            _selectedOs = detectedOs;
+
+            // Set appropriate message based on detected OS
+            _osDetectionMessage = detectedOs switch
+            {
+                "windows-powershell" => "Auto-detected: Windows (PowerShell selected - no additional software needed)",
+                "macos" => "Auto-detected: macOS",
+                "linux" => "Auto-detected: Linux",
+                _ => "Could not detect OS - defaulted to Linux"
+            };
+        }
+        catch (Exception)
+        {
+            _selectedOs = "linux";
+            _osDetectionMessage = "OS detection unavailable - defaulted to Linux";
+        }
+    }
+
+    private bool IsFormValid => 
+        !string.IsNullOrWhiteSpace(_wifiSsid) && 
+        !string.IsNullOrWhiteSpace(_wifiPassword);
+
+    private void TogglePasswordVisibility()
+    {
+        _showPassword = !_showPassword;
+    }
+
+    private string GetGeneratedCommand()
+    {
+        if (!IsFormValid) return string.Empty;
+
+        var jsonPayload = $"{{\\\"psw\\\": \\\"{EscapeJsonString(_wifiPassword)}\\\",\\\"ssid\\\": \\\"{EscapeJsonString(_wifiSsid)}\\\",\\\"t\\\": \\\"wlan\\\"}}";
+        
+        return _selectedOs switch
+        {
+            "linux" => $"echo -n \"{jsonPayload}\" | nc -cu 192.168.1.1 7000",
+            "macos" => $"echo -n \"{jsonPayload}\" | nc -cu 192.168.1.1 7000",
+            "windows-wsl" => $"echo -n \"{jsonPayload}\" | nc -cu 192.168.1.1 7000",
+            "windows-powershell" => GetPowerShellCommand(jsonPayload),
+            "windows-ncat" => $"echo {jsonPayload} | ncat -u 192.168.1.1 7000",
+            _ => $"echo -n \"{jsonPayload}\" | nc -cu 192.168.1.1 7000"
+        };
+    }
+
+    private string GetPowerShellCommand(string jsonPayload)
+    {
+        // PowerShell UDP command using .NET classes - remove extra escaping for PowerShell
+        var cleanPayload = jsonPayload.Replace("\\\"", "\"");
+        return $"$bytes = [System.Text.Encoding]::UTF8.GetBytes('{cleanPayload}'); $client = New-Object System.Net.Sockets.UdpClient; $client.Connect('192.168.1.1', 7000); $client.Send($bytes, $bytes.Length); $client.Close()";
+    }
+
+    private string EscapeJsonString(string input)
+    {
+        return input.Replace("\\", "\\\\").Replace("\"", "\\\"");
+    }
+
+    private async Task CopyToClipboard()
+    {
+        if (!IsFormValid) return;
+
+        try
+        {
+            var command = GetGeneratedCommand();
+            await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", command);
+            Snackbar.Add("Command copied to clipboard!", Severity.Success);
+        }
+        catch (Exception)
+        {
+            Snackbar.Add("Failed to copy to clipboard. Please copy manually.", Severity.Error);
+        }
+    }
+
+    private void ClearForm()
+    {
+        _wifiSsid = string.Empty;
+        _wifiPassword = string.Empty;
+        // Don't reset OS selection to preserve auto-detection
+        _showPassword = false;
+        Snackbar.Add("Form cleared", Severity.Info);
+    }
+}

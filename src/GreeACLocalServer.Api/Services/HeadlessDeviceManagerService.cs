@@ -61,21 +61,43 @@ public class HeadlessDeviceManagerService(IOptions<DeviceManagerOptions> options
         await OnDevicesRemovedAsync(removed);
     }
 
-    public virtual async Task<IEnumerable<DeviceDto>> GetAllDeviceStatesAsync(CancellationToken cancellationToken = default)
+    public virtual Task<IEnumerable<DeviceDto>> GetAllDeviceStatesAsync(CancellationToken cancellationToken = default)
     {
-        await RemoveStaleDevicesAsync();
+        // Remove automatic stale device removal
         IEnumerable<DeviceDto> result = _deviceStates.Values.Select(v => new DeviceDto(v.MacAddress, v.IpAddress, v.DNSName, v.LastConnectionTime));
-        return result;
+        return Task.FromResult(result);
     }
 
-    public virtual async Task<DeviceDto?> GetAsync(string macAddress, CancellationToken cancellationToken = default)
+    public virtual Task<DeviceDto?> GetAsync(string macAddress, CancellationToken cancellationToken = default)
     {
-        await RemoveStaleDevicesAsync();
+        // Remove automatic stale device removal
         if (_deviceStates.TryGetValue(macAddress, out var state))
         {
-            return new DeviceDto(state.MacAddress, state.IpAddress, state.DNSName, state.LastConnectionTime);
+            DeviceDto dto = new DeviceDto(state.MacAddress, state.IpAddress, state.DNSName, state.LastConnectionTime);
+            return Task.FromResult<DeviceDto?>(dto);
         }
-        return null;
+        return Task.FromResult<DeviceDto?>(null);
+    }
+
+    public virtual async Task<bool> RemoveDeviceAsync(string macAddress, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(macAddress)) 
+        {
+            return false;
+        }
+        
+        if (_deviceStates.TryRemove(macAddress, out _))
+        {
+            // Notify derived classes (e.g., SignalR notifications)
+            await OnDevicesRemovedAsync(new List<string> { macAddress });
+            return true;
+        }
+        return false;
+    }
+
+    public virtual async Task<bool> RemoveDeviceAsync(string macAddress)
+    {
+        return await RemoveDeviceAsync(macAddress, CancellationToken.None);
     }
 
     /// <summary>

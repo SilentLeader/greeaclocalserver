@@ -30,12 +30,17 @@ public class HttpDeviceManagerService(HttpClient httpClient) : IDeviceManagerSer
 
     public async Task<DeviceDto?> GetAsync(string macAddress, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(macAddress)) return null;
+        if (string.IsNullOrWhiteSpace(macAddress)) 
+        {
+            return null;
+        }
         try
         {
             var response = await _http.GetAsync($"api/devices/{Uri.EscapeDataString(macAddress)}", cancellationToken).ConfigureAwait(false);
             if (response.StatusCode == HttpStatusCode.NotFound)
+            {
                 return null;
+            }
 
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadFromJsonAsync<DeviceDto>(cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -43,6 +48,23 @@ public class HttpDeviceManagerService(HttpClient httpClient) : IDeviceManagerSer
         catch
         {
             return null;
+        }
+    }
+
+    public async Task<bool> RemoveDeviceAsync(string macAddress, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(macAddress)) 
+        {
+            return false;
+        }
+        try
+        {
+            var response = await _http.DeleteAsync($"api/devices/{Uri.EscapeDataString(macAddress)}", cancellationToken).ConfigureAwait(false);
+            return response.IsSuccessStatusCode;
+        }
+        catch
+        {
+            return false;
         }
     }
 }

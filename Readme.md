@@ -22,15 +22,17 @@ This project provides a **modern, feature-rich local replacement server for GREE
 - **Real-time Device Monitoring** via SignalR
 - **Device Dashboard** showing MAC addresses, IP addresses, DNS names, and connection status
 - **Built-in Device Configuration Tool** for managing AC settings without external tools
+- **WiFi Configuration Tool** with cross-platform command generation (Linux, macOS, Windows)
 - **Management Control** - Device configuration features can be disabled for security
 - **Responsive Design** optimized for desktop and mobile
 
 ### **Advanced Device Management**
 - **Automatic Device Discovery** when ACs connect to the network
+- **Manual Device Removal** with confirmation dialogs for unwanted devices
 - **DNS Resolution** of device IP addresses to FQDNs (with fallback to IP)
-- **Connection Health Monitoring** with automatic cleanup of stale devices
+- **Connection Health Monitoring** with configurable device timeouts
 - **Real-time Status Updates** via SignalR broadcasting
-- **Configurable Device Timeouts**
+- **Device Control Interface** with remove buttons and management actions
 
 ### **Developer & Operations Features**
 - **Structured Logging** with Serilog
@@ -303,7 +305,7 @@ The application is configured via `appsettings.json`. Here are the key settings:
 ```json
 {
   "DeviceManager": {
-    "DeviceTimeoutMinutes": 60        // Minutes before removing stale devices
+    "DeviceTimeoutMinutes": 60        // Minutes for device timeout (used for display status, not automatic removal)
   },
   "Kestrel": {
     "Endpoints": {
@@ -314,6 +316,8 @@ The application is configured via `appsettings.json`. Here are the key settings:
   }
 }
 ```
+
+**Note**: Device removal is now **manual only**. The `DeviceTimeoutMinutes` setting is used only to determine the online/offline status display and does not automatically remove devices from the system.
 
 ## 🔧 **DNS Server Setup**
 
@@ -362,6 +366,56 @@ The server now includes a **built-in web-based device configuration tool** acces
 - **UDP Port 7000** - Used for device communication
 - **Device State** - AC must be powered on and network-connected
 
+### **Built-in WiFi Configuration Tool**
+
+The server includes a dedicated **WiFi Configuration page** at `/wifi-config` to help users configure their air conditioner's WiFi settings without external tools.
+
+#### **Features**
+- **Cross-platform Support** - Generates appropriate commands for Linux, macOS, and Windows
+- **Real-time Command Generation** - Command updates immediately as you type
+- **Multiple Windows Options** - WSL, PowerShell (native), and Ncat alternatives
+- **Password Security** - Visibility toggle and proper JSON string escaping
+- **Copy to Clipboard** - One-click command copying
+- **Step-by-step Instructions** - Clear guidance for the entire process
+- **Installation Help** - Platform-specific installation instructions
+
+#### **Supported Platforms**
+- **Linux** - Standard netcat (`nc -cu`)
+- **macOS** - Standard netcat (`nc -cu`)
+- **Windows (WSL)** - Netcat in Windows Subsystem for Linux
+- **Windows (PowerShell)** - Native .NET UDP socket approach (no additional software needed)
+- **Windows (Ncat)** - Nmap suite's netcat alternative
+
+#### **How to Use**
+1. **Reset AC WiFi** - Press MODE + WIFI (or MODE + TURBO) on remote for 5 seconds
+2. **Connect to AC hotspot** - Join the AC's WiFi network (8-character alphanumeric SSID)
+3. **Access the tool** at `http://your-server:5100/wifi-config`
+4. **Enter WiFi credentials** - Input your home WiFi SSID and password
+5. **Select your OS** - Choose appropriate operating system
+6. **Copy and run command** - Execute the generated command in your terminal
+
+#### **Generated Commands**
+
+**Linux/macOS/WSL:**
+```bash
+echo -n "{\"psw\": \"password\",\"ssid\": \"network\",\"t\": \"wlan\"}" | nc -cu 192.168.1.1 7000
+```
+
+**Windows PowerShell (recommended for Windows users):**
+```powershell
+$bytes = [System.Text.Encoding]::UTF8.GetBytes('{"psw": "password","ssid": "network","t": "wlan"}'); $client = New-Object System.Net.Sockets.UdpClient; $client.Connect('192.168.1.1', 7000); $client.Send($bytes, $bytes.Length); $client.Close()
+```
+
+**Windows Ncat:**
+```cmd
+echo {"psw": "password","ssid": "network","t": "wlan"} | ncat -u 192.168.1.1 7000
+```
+
+#### **Requirements**
+- **AC in AP mode** - Device must be broadcasting its own WiFi network
+- **Network connection** - Connected to the AC's WiFi hotspot (192.168.1.1)
+- **Appropriate tools** - netcat, PowerShell, or Ncat depending on platform
+
 ### **External Configuration Tool (Alternative)**
 
 For advanced use cases or initial setup, you can also use:
@@ -380,6 +434,8 @@ Access the web interface at: `http://your-server-ip:5100`
 - **Live Device Dashboard** - Real-time view of connected devices
 - **Device Information** - MAC addresses, IP addresses, DNS names
 - **Connection Status** - Last seen timestamps and health indicators
+- **Manual Device Removal** - Remove unwanted devices with confirmation dialogs
+- **Device Action Controls** - Remove buttons with intuitive icon-based interface
 - **Dark/Light Theme** - Automatic detection based on browser preference
 - **Responsive Design** - Works on desktop, tablet, and mobile
 
@@ -390,12 +446,27 @@ Access the web interface at: `http://your-server-ip:5100`
 - **Autocomplete Selection** - Easy selection from known connected devices
 - **Real-time Operations** - Immediate feedback on configuration changes
 
+### **WiFi Configuration Tool** (`/wifi-config`)
+- **Cross-platform Command Generation** - Creates appropriate commands for Linux, macOS, and Windows
+- **Real-time Updates** - Command generates immediately as you type
+- **Multiple Windows Support** - WSL, PowerShell (native), and Ncat options
+- **Security Features** - Password visibility toggle and JSON string escaping
+- **Step-by-step Guidance** - Complete instructions for AC WiFi setup
+- **Clipboard Integration** - One-click command copying
+
 ### **Dashboard Information**
 - **MAC Address** - Device hardware identifier
 - **IP Address** - Current network address of the device
 - **DNS Name** - Resolved hostname (if available)
 - **Last Seen** - Timestamp of last communication
 - **Status** - Online/Offline indicator
+- **Device Actions** - Details button for configuration and remove button for device management
+
+### **Device Removal**
+- **Manual Removal** - Click the red delete icon on any device card
+- **Confirmation Dialog** - Prevents accidental device removal
+- **Real-time Updates** - Removed devices disappear immediately from all connected clients
+- **Error Handling** - Clear feedback if device removal fails
 
 ## � **API Endpoints**
 
@@ -418,6 +489,20 @@ The server exposes RESTful API endpoints for programmatic access:
 ### **Device Management API**
 - **GET `/api/devices`** - List all known devices
 - **GET `/api/devices/{mac}`** - Get specific device by MAC address
+- **DELETE `/api/devices/{mac}`** - Remove device from the system (manual operation)
+  ```json
+  // Success response (HTTP 200)
+  {
+    "success": true,
+    "message": "Device AA:BB:CC:DD:EE:FF removed successfully"
+  }
+  
+  // Not found response (HTTP 404)
+  {
+    "success": false,
+    "message": "Device AA:BB:CC:DD:EE:FF not found"
+  }
+  ```
 
 **Note**: Management endpoints return HTTP 200 with error response when `EnableManagement` is disabled.
 
@@ -438,6 +523,22 @@ The server exposes RESTful API endpoints for programmatic access:
 6. **Remote Host Update Failed** - Verify the new server address is correct and accessible
 7. **Management Features Disabled** - Check `EnableManagement` setting in server configuration
 8. **"Device management is disabled" Error** - Server administrator has disabled management features via `EnableManagement: false`
+
+### **Device Removal Issues**
+1. **Remove Button Not Visible** - Check if device card is fully loaded
+2. **Removal Confirmation Not Appearing** - Browser may be blocking dialog prompts
+3. **Device Not Removed** - Check network connection and API availability
+4. **Device Reappears After Removal** - Device may be actively reconnecting; configure device to point to different server first
+5. **API Error During Removal** - Check server logs for specific error messages
+
+### **WiFi Configuration Issues**
+1. **AC Not in AP Mode** - Reset WiFi by pressing MODE + WIFI (or MODE + TURBO) for 5 seconds on remote
+2. **Cannot Connect to AC Hotspot** - Look for 8-character alphanumeric SSID (e.g., "u34k5l166")
+3. **Command Not Found (Windows)** - Use PowerShell option (no additional software needed) or install WSL/Ncat
+4. **Connection Refused** - Ensure you're connected to AC's WiFi network and 192.168.1.1 is reachable
+5. **Command Fails on Windows** - Try PowerShell version or install netcat via `choco install netcat`
+6. **AC Doesn't Connect to Home WiFi** - Verify SSID and password are correct, check WiFi signal strength
+7. **Special Characters in Password** - Use PowerShell option as it handles JSON escaping automatically
 
 ### **Web UI Not Loading**
 1. **Check Port 5100** - Ensure it's not blocked by firewall
@@ -552,6 +653,7 @@ This project is licensed under the **GNU General Public License v3.0** - see the
 
 - **Original Project**: [GreeAC-DummyServer](https://github.com/emtek-at/GreeAC-DummyServer)
 - **Configuration Tool**: [GreeAC-ConfigTool](https://github.com/emtek-at/GreeAC-ConfigTool)
+- **WiFi Configuration Reference**: [GREE HVAC MQTT Bridge](https://github.com/arthurkrupa/gree-hvac-mqtt-bridge) - Source for WiFi configuration method
 
 ---
 

@@ -3,6 +3,7 @@
 @inject IDeviceManagerService DeviceService
 @inject IDialogService DialogService
 @using Microsoft.AspNetCore.SignalR.Client
+@using GreeACLocalServer.UI.Services
 
 
 
@@ -57,6 +58,12 @@ else
                                  OnClick="() => ShowDeviceDetails(device)" >
                             Details
                         </MudButton>
+                        <MudSpacer />
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" 
+                                     Color="Color.Error" 
+                                     Size="Size.Small"
+                                     title="Remove Device"
+                                     OnClick="() => RemoveDevice(device)" />
                     </MudCardActions>
                 </MudCard>
             </MudItem>
@@ -190,6 +197,28 @@ else
         };
 
         await DialogService.ShowAsync<DeviceDetailsDialog>("Device Details", parameters, options);
+    }
+
+    private async Task RemoveDevice(DeviceDto device)
+    {
+        var result = await DialogService.ShowMessageBox(
+            "Confirm Device Removal",
+            $"Are you sure you want to remove device '{device.DNSName}' ({DeviceHelpers.FormatMacAddress(device.MacAddress)})?",
+            yesText: "Remove", cancelText: "Cancel");
+
+        if (result == true)
+        {
+            var success = await DeviceService.RemoveDeviceAsync(device.MacAddress);
+            if (!success)
+            {
+                // Show error message if removal failed
+                await DialogService.ShowMessageBox(
+                    "Remove Failed",
+                    $"Failed to remove device '{device.DNSName}'. The device may have already been removed.",
+                    "OK");
+            }
+            // If successful, the device will be removed from the UI via SignalR notification
+        }
     }
 
     private async Task UpdateOpenDialogs()
