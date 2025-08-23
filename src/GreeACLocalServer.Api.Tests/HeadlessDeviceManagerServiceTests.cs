@@ -158,7 +158,7 @@ public class HeadlessDeviceManagerServiceTests
     }
 
     [Fact]
-    public async Task GetAllDeviceStatesAsync_CallsRemoveStaleDevices()
+    public async Task GetAllDeviceStatesAsync_DoesNotRemoveStaleDevicesAutomatically()
     {
         // Arrange
         var macAddress = "AA:BB:CC:DD:EE:FF";
@@ -168,15 +168,13 @@ public class HeadlessDeviceManagerServiceTests
         // Reset DNS resolver call count
         _mockDnsResolver.Reset();
         
-        // Setup DNS resolver to track if it's called during stale device removal
-        _mockDnsResolver.Setup(x => x.ResolveDnsNameAsync(It.IsAny<string>()))
-            .ReturnsAsync((string ip) => $"device-{ip.Replace(".", "-")}.local");
-
         // Act
-        await _deviceManagerService.GetAllDeviceStatesAsync();
+        var devices = await _deviceManagerService.GetAllDeviceStatesAsync();
 
-        // Assert - Should not call DNS resolver as device is recent
+        // Assert - Should not call DNS resolver since we removed automatic stale device removal
         _mockDnsResolver.Verify(x => x.ResolveDnsNameAsync(It.IsAny<string>()), Times.Never);
+        Assert.Single(devices);
+        Assert.Equal(macAddress, devices.First().MacAddress);
     }
 
     [Fact]
@@ -196,5 +194,52 @@ public class HeadlessDeviceManagerServiceTests
         
         // But would fail when actually using DNS resolution
         // We don't test that here as it would require async testing
+    }
+
+    [Fact]
+    public async Task RemoveDeviceAsync_WithExistingDevice_RemovesDevice()
+    {
+        // Arrange
+        var macAddress = "AA:BB:CC:DD:EE:FF";
+        var ipAddress = "192.168.1.100";
+
+        await _deviceManagerService.UpdateOrAddAsync(macAddress, ipAddress);
+        
+        // Verify device exists
+        var deviceBefore = await _deviceManagerService.GetAsync(macAddress);
+        Assert.NotNull(deviceBefore);
+
+        // Act
+        var removed = await _deviceManagerService.RemoveDeviceAsync(macAddress);
+
+        // Assert
+        Assert.True(removed);
+        var deviceAfter = await _deviceManagerService.GetAsync(macAddress);
+        Assert.Null(deviceAfter);
+    }
+
+    [Fact]
+    public async Task RemoveDeviceAsync_WithNonExistentDevice_ReturnsFalse()
+    {
+        // Arrange
+        var macAddress = "AA:BB:CC:DD:EE:FF";
+
+        // Act
+        var removed = await _deviceManagerService.RemoveDeviceAsync(macAddress);
+
+        // Assert
+        Assert.False(removed);
+    }
+
+    [Fact]
+    public async Task RemoveDeviceAsync_WithEmptyMacAddress_ReturnsFalse()
+    {
+        // Act
+        var removedEmpty = await _deviceManagerService.RemoveDeviceAsync("");
+        var removedNull = await _deviceManagerService.RemoveDeviceAsync(null!);
+
+        // Assert
+        Assert.False(removedEmpty);
+        Assert.False(removedNull);
     }
 }

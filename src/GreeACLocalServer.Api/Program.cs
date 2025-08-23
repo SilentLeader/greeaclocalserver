@@ -209,6 +209,13 @@ namespace GreeACLocalServer.Api
                     ? Results.NotFound()
                     : Results.Ok(device);
             });
+            api.MapDelete("/devices/{mac}", async (string mac, IInternalDeviceManagerService dms) =>
+            {
+                var removed = await dms.RemoveDeviceAsync(mac);
+                return removed
+                    ? Results.Ok(new { Success = true, Message = $"Device {mac} removed successfully" })
+                    : Results.NotFound(new { Success = false, Message = $"Device {mac} not found" });
+            });
             
             // Device configuration endpoints
             var deviceConfig = api.MapGroup("/device-config");

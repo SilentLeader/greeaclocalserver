@@ -67,6 +67,13 @@ dotnet test src/GreeACLocalServer.sln
 dotnet test --filter "MessageHandlerServiceTests"
 ```
 
+### Documentation Workflow
+When updating documentation files (README.md, .md files), **do not** run build or unit tests:
+- **Documentation changes**: Only affect user/developer guidance, not code functionality
+- **README updates**: Focus on content accuracy and clarity
+- **Workflow efficiency**: Avoid unnecessary build/test cycles for non-code changes
+- **Exception**: Only run tests if documentation changes indicate potential code issues
+
 ## Code Patterns & Conventions
 
 ### Configuration Pattern

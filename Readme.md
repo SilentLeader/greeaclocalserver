@@ -28,10 +28,11 @@ This project provides a **modern, feature-rich local replacement server for GREE
 
 ### **Advanced Device Management**
 - **Automatic Device Discovery** when ACs connect to the network
+- **Manual Device Removal** with confirmation dialogs for unwanted devices
 - **DNS Resolution** of device IP addresses to FQDNs (with fallback to IP)
-- **Connection Health Monitoring** with automatic cleanup of stale devices
+- **Connection Health Monitoring** with configurable device timeouts
 - **Real-time Status Updates** via SignalR broadcasting
-- **Configurable Device Timeouts**
+- **Device Control Interface** with remove buttons and management actions
 
 ### **Developer & Operations Features**
 - **Structured Logging** with Serilog
@@ -304,7 +305,7 @@ The application is configured via `appsettings.json`. Here are the key settings:
 ```json
 {
   "DeviceManager": {
-    "DeviceTimeoutMinutes": 60        // Minutes before removing stale devices
+    "DeviceTimeoutMinutes": 60        // Minutes for device timeout (used for display status, not automatic removal)
   },
   "Kestrel": {
     "Endpoints": {
@@ -315,6 +316,8 @@ The application is configured via `appsettings.json`. Here are the key settings:
   }
 }
 ```
+
+**Note**: Device removal is now **manual only**. The `DeviceTimeoutMinutes` setting is used only to determine the online/offline status display and does not automatically remove devices from the system.
 
 ## 🔧 **DNS Server Setup**
 
@@ -431,6 +434,8 @@ Access the web interface at: `http://your-server-ip:5100`
 - **Live Device Dashboard** - Real-time view of connected devices
 - **Device Information** - MAC addresses, IP addresses, DNS names
 - **Connection Status** - Last seen timestamps and health indicators
+- **Manual Device Removal** - Remove unwanted devices with confirmation dialogs
+- **Device Action Controls** - Remove buttons with intuitive icon-based interface
 - **Dark/Light Theme** - Automatic detection based on browser preference
 - **Responsive Design** - Works on desktop, tablet, and mobile
 
@@ -455,6 +460,13 @@ Access the web interface at: `http://your-server-ip:5100`
 - **DNS Name** - Resolved hostname (if available)
 - **Last Seen** - Timestamp of last communication
 - **Status** - Online/Offline indicator
+- **Device Actions** - Details button for configuration and remove button for device management
+
+### **Device Removal**
+- **Manual Removal** - Click the red delete icon on any device card
+- **Confirmation Dialog** - Prevents accidental device removal
+- **Real-time Updates** - Removed devices disappear immediately from all connected clients
+- **Error Handling** - Clear feedback if device removal fails
 
 ## � **API Endpoints**
 
@@ -477,6 +489,20 @@ The server exposes RESTful API endpoints for programmatic access:
 ### **Device Management API**
 - **GET `/api/devices`** - List all known devices
 - **GET `/api/devices/{mac}`** - Get specific device by MAC address
+- **DELETE `/api/devices/{mac}`** - Remove device from the system (manual operation)
+  ```json
+  // Success response (HTTP 200)
+  {
+    "success": true,
+    "message": "Device AA:BB:CC:DD:EE:FF removed successfully"
+  }
+  
+  // Not found response (HTTP 404)
+  {
+    "success": false,
+    "message": "Device AA:BB:CC:DD:EE:FF not found"
+  }
+  ```
 
 **Note**: Management endpoints return HTTP 200 with error response when `EnableManagement` is disabled.
 
@@ -497,6 +523,13 @@ The server exposes RESTful API endpoints for programmatic access:
 6. **Remote Host Update Failed** - Verify the new server address is correct and accessible
 7. **Management Features Disabled** - Check `EnableManagement` setting in server configuration
 8. **"Device management is disabled" Error** - Server administrator has disabled management features via `EnableManagement: false`
+
+### **Device Removal Issues**
+1. **Remove Button Not Visible** - Check if device card is fully loaded
+2. **Removal Confirmation Not Appearing** - Browser may be blocking dialog prompts
+3. **Device Not Removed** - Check network connection and API availability
+4. **Device Reappears After Removal** - Device may be actively reconnecting; configure device to point to different server first
+5. **API Error During Removal** - Check server logs for specific error messages
 
 ### **WiFi Configuration Issues**
 1. **AC Not in AP Mode** - Reset WiFi by pressing MODE + WIFI (or MODE + TURBO) for 5 seconds on remote
