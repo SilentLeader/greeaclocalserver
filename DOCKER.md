@@ -48,7 +48,6 @@ docker-compose up -d
 | `Server__ExternalIp` | `192.168.1.100` | Server IP address |
 | `Server__EnableUI` | `true` | Enable/disable web interface |
 | `Server__CryptoKey` | `a3K8Bx%2r8Y7#xDh` | GREE encryption key |
-| `DeviceManager__DeviceTimeoutMinutes` | `60` | Device timeout in minutes |
 | `ASPNETCORE_ENVIRONMENT` | `Production` | ASP.NET Core environment |
 
 ### Volume Mounts

@@ -166,7 +166,8 @@ else
 
     private bool IsDeviceOnline(DeviceDto device)
     {
-        // Device is considered offline if last connection was more than 10 minutes ago
+        // Device is considered offline for display purposes if last connection was more than 10 minutes ago
+        // This only affects the visual indicator, devices are never automatically removed
         var threshold = DateTime.UtcNow.AddMinutes(-10);
         return device.LastConnectionTimeUtc > threshold;
     }

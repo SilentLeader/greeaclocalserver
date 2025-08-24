@@ -17,9 +17,6 @@ services:
       - Server__EnableUI=true
       - Server__CryptoKey=a3K8Bx%2r8Y7#xDh
       
-      # Device Manager Configuration  
-      - DeviceManager__DeviceTimeoutMinutes=60
-      
       # Logging Configuration
       - Serilog__MinimumLevel=Information
       

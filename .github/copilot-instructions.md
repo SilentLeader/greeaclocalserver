@@ -80,7 +80,6 @@ When updating documentation files (README.md, .md files), **do not** run build o
 All services use strongly-typed options classes bound from `appsettings.json`:
 ```csharp
 services.Configure<ServerOptions>(configuration.GetSection("Server"));
-services.Configure<DeviceManagerOptions>(configuration.GetSection("DeviceManager"));
 ```
 
 ### Service Registration Pattern

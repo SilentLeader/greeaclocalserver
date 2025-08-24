@@ -304,9 +304,6 @@ The application is configured via `appsettings.json`. Here are the key settings:
 ### **Additional Configuration**
 ```json
 {
-  "DeviceManager": {
-    "DeviceTimeoutMinutes": 60        // Minutes for device timeout (used for display status, not automatic removal)
-  },
   "Kestrel": {
     "Endpoints": {
       "Http": {
@@ -317,7 +314,7 @@ The application is configured via `appsettings.json`. Here are the key settings:
 }
 ```
 
-**Note**: Device removal is now **manual only**. The `DeviceTimeoutMinutes` setting is used only to determine the online/offline status display and does not automatically remove devices from the system.
+**Note**: Device removal is now **manual only**. Devices remain in the system until manually removed via the web interface or API.
 
 ## 🔧 **DNS Server Setup**
 

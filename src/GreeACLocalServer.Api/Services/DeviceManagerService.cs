@@ -5,9 +5,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using GreeACLocalServer.Api.Models;
-using GreeACLocalServer.Api.Options;
-using Microsoft.Extensions.Options;
-using GreeACLocalServer.Shared.Contracts;
 using Microsoft.AspNetCore.SignalR;
 using GreeACLocalServer.Api.Hubs;
 using GreeACLocalServer.Shared.ValueObjects;
@@ -18,8 +15,8 @@ namespace GreeACLocalServer.Api.Services;
 /// Device manager service with SignalR support for UI notifications.
 /// Inherits core functionality from HeadlessDeviceManagerService and adds real-time updates.
 /// </summary>
-public class DeviceManagerService(IOptions<DeviceManagerOptions> options, IHubContext<DeviceHub> hubContext, IDnsResolverService dnsResolver) 
-    : HeadlessDeviceManagerService(options, dnsResolver)
+public class DeviceManagerService(IHubContext<DeviceHub> hubContext, IDnsResolverService dnsResolver) 
+    : HeadlessDeviceManagerService(dnsResolver)
 {
     private readonly IHubContext<DeviceHub> _hub = hubContext;
 

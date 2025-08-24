@@ -126,7 +126,6 @@ namespace GreeACLocalServer.Api
             
             // Configuration options
             services.Configure<ServerOptions>(configuration.GetSection("Server"));
-            services.Configure<DeviceManagerOptions>(configuration.GetSection("DeviceManager"));
             
             // Background services
             services.AddHostedService<SocketHandlerBackgroundService>();

@@ -1,35 +1,23 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Options;
 using Moq;
-using GreeACLocalServer.Api.Options;
 using GreeACLocalServer.Api.Services;
 
 namespace GreeACLocalServer.Api.Tests;
 
 public class HeadlessDeviceManagerServiceTests
 {
-    private readonly Mock<IOptions<DeviceManagerOptions>> _mockOptions;
     private readonly Mock<IDnsResolverService> _mockDnsResolver;
     private readonly HeadlessDeviceManagerService _deviceManagerService;
-    private readonly DeviceManagerOptions _deviceManagerOptions;
 
     public HeadlessDeviceManagerServiceTests()
     {
-        _deviceManagerOptions = new DeviceManagerOptions
-        {
-            DeviceTimeoutMinutes = 30
-        };
-
-        _mockOptions = new Mock<IOptions<DeviceManagerOptions>>();
-        _mockOptions.Setup(x => x.Value).Returns(_deviceManagerOptions);
-
         _mockDnsResolver = new Mock<IDnsResolverService>();
         _mockDnsResolver.Setup(x => x.ResolveDnsNameAsync(It.IsAny<string>()))
             .ReturnsAsync((string ip) => $"device-{ip.Replace(".", "-")}.local");
 
-        _deviceManagerService = new HeadlessDeviceManagerService(_mockOptions.Object, _mockDnsResolver.Object);
+        _deviceManagerService = new HeadlessDeviceManagerService(_mockDnsResolver.Object);
     }
 
     [Fact]
@@ -105,45 +93,6 @@ public class HeadlessDeviceManagerServiceTests
     }
 
     [Fact]
-    public async Task RemoveStaleDevicesAsync_WithExpiredDevices_RemovesDevices()
-    {
-        // Arrange
-        _deviceManagerOptions.DeviceTimeoutMinutes = 0; // Immediate timeout for testing
-        var macAddress = "AA:BB:CC:DD:EE:FF";
-        var ipAddress = "192.168.1.100";
-
-        await _deviceManagerService.UpdateOrAddAsync(macAddress, ipAddress);
-        
-        // Wait a bit to ensure timeout
-        await Task.Delay(100);
-
-        // Act
-        await _deviceManagerService.RemoveStaleDevicesAsync();
-
-        // Assert
-        var device = await _deviceManagerService.GetAsync(macAddress);
-        Assert.Null(device);
-    }
-
-    [Fact]
-    public async Task RemoveStaleDevicesAsync_WithRecentDevices_DoesNotRemoveDevices()
-    {
-        // Arrange
-        _deviceManagerOptions.DeviceTimeoutMinutes = 60; // Long timeout
-        var macAddress = "AA:BB:CC:DD:EE:FF";
-        var ipAddress = "192.168.1.100";
-
-        await _deviceManagerService.UpdateOrAddAsync(macAddress, ipAddress);
-
-        // Act
-        await _deviceManagerService.RemoveStaleDevicesAsync();
-
-        // Assert
-        var device = await _deviceManagerService.GetAsync(macAddress);
-        Assert.NotNull(device);
-    }
-
-    [Fact]
     public async Task UpdateOrAddAsync_CallsDnsResolver()
     {
         // Arrange
@@ -178,18 +127,10 @@ public class HeadlessDeviceManagerServiceTests
     }
 
     [Fact]
-    public void Constructor_WithNullOptions_ThrowsNullReferenceException()
-    {
-        // Arrange, Act & Assert
-        Assert.Throws<NullReferenceException>(() => 
-            new HeadlessDeviceManagerService(null!, _mockDnsResolver.Object));
-    }
-
-    [Fact]
     public void Constructor_WithNullDnsResolver_DoesNotThrowImmediately()
     {
         // Arrange, Act & Assert - Null DNS resolver doesn't fail immediately in constructor
-        var service = new HeadlessDeviceManagerService(_mockOptions.Object, null!);
+        var service = new HeadlessDeviceManagerService(null!);
         Assert.NotNull(service);
         
         // But would fail when actually using DNS resolution

@@ -1,8 +1,5 @@
-using GreeACLocalServer.Api.Options;
-using GreeACLocalServer.Api.Services;
 using GreeACLocalServer.Shared.Contracts;
 using GreeACLocalServer.Shared.Interfaces;
-using Microsoft.Extensions.Options;
 using System.Collections.Concurrent;
 using GreeACLocalServer.Api.Models;
 
@@ -12,10 +9,9 @@ namespace GreeACLocalServer.Api.Services;
 /// Base device manager service that provides core functionality without SignalR dependencies.
 /// Can be used directly for headless mode or inherited by DeviceManagerService for UI mode.
 /// </summary>
-public class HeadlessDeviceManagerService(IOptions<DeviceManagerOptions> options, IDnsResolverService dnsResolver) : IInternalDeviceManagerService
+public class HeadlessDeviceManagerService(IDnsResolverService dnsResolver) : IInternalDeviceManagerService
 {
     protected readonly ConcurrentDictionary<string, AcDeviceState> _deviceStates = new();
-    protected readonly DeviceManagerOptions _options = options.Value;
     protected readonly IDnsResolverService _dnsResolver = dnsResolver;
 
     public virtual async Task UpdateOrAddAsync(string macAddress, string ipAddress)
@@ -40,25 +36,6 @@ public class HeadlessDeviceManagerService(IOptions<DeviceManagerOptions> options
 
         // Virtual method hook for derived classes (e.g., SignalR notifications)
         await OnDeviceUpdatedAsync(state);
-    }
-
-    public virtual async Task RemoveStaleDevicesAsync()
-    {
-        var threshold = DateTime.UtcNow.AddMinutes(-_options.DeviceTimeoutMinutes);
-        var removed = new List<string>();
-        foreach (var kvp in _deviceStates)
-        {
-            if (kvp.Value.LastConnectionTime < threshold)
-            {
-                if (_deviceStates.TryRemove(kvp.Key, out _))
-                {
-                    removed.Add(kvp.Key);
-                }
-            }
-        }
-
-        // Virtual method hook for derived classes (e.g., SignalR notifications)
-        await OnDevicesRemovedAsync(removed);
     }
 
     public virtual Task<IEnumerable<DeviceDto>> GetAllDeviceStatesAsync(CancellationToken cancellationToken = default)
