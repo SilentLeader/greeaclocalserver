@@ -1,4 +1,4 @@
-namespace GreeACLocalServer.UI.Services;
+namespace GreeACLocalServer.UI.Helpers;
 
 /// <summary>
 /// Helper methods for device-related formatting and utilities

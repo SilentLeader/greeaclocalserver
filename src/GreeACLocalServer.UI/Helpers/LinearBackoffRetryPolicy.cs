@@ -1,7 +1,6 @@
-using System;
 using Microsoft.AspNetCore.SignalR.Client;
 
-namespace GreeACLocalServer.UI.Services;
+namespace GreeACLocalServer.UI.Helpers;
 
 public sealed class LinearBackoffRetryPolicy : IRetryPolicy
 {
@@ -25,7 +24,10 @@ public sealed class LinearBackoffRetryPolicy : IRetryPolicy
         var attempt = retryContext.PreviousRetryCount;
         var seconds = _initialSeconds + (attempt * _incrementSeconds);
         if (seconds > _maxSeconds)
+        {
             seconds = _maxSeconds;
+        }
+
         return TimeSpan.FromSeconds(seconds);
     }
 }
