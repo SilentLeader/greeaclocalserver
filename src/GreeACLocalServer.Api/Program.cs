@@ -1,6 +1,7 @@
 ﻿using GreeACLocalServer.Api.Components;
 using GreeACLocalServer.Api.Hubs;
 using GreeACLocalServer.Api.Services;
+using GreeACLocalServer.UI.Services;
 using Microsoft.AspNetCore.Mvc;
 using MudBlazor.Services;
 using Serilog;
@@ -167,7 +168,9 @@ namespace GreeACLocalServer.Api
             services.AddMudServices();
             
             // Register server-side browser detection service
-            services.AddScoped<IBrowserDetectionService, ServerBrowserDetectionService>();
+            //services.AddScoped<IBrowserDetectionService, ServerBrowserDetectionService>();
+            services.AddScoped<IBrowserDetectionService, ClientBrowserDetectionService>();
+            
             
             services.AddRazorComponents()
                 .AddInteractiveServerComponents()
