@@ -18,7 +18,7 @@ namespace GreeACLocalServer.Api.Services;
 /// Device manager service with SignalR support for UI notifications.
 /// Inherits core functionality from HeadlessDeviceManagerService and adds real-time updates.
 /// </summary>
-public class DeviceManagerService(IOptions<DeviceManagerOptions> options, IHubContext<DeviceHub> hubContext, IDnsResolverService dnsResolver) 
+public class DeviceManagerService(IOptionsMonitor<DeviceManagerOptions> options, IHubContext<DeviceHub> hubContext, IDnsResolverService dnsResolver)
     : HeadlessDeviceManagerService(options, dnsResolver)
 {
     private readonly IHubContext<DeviceHub> _hub = hubContext;
@@ -41,9 +41,9 @@ public class DeviceManagerService(IOptions<DeviceManagerOptions> options, IHubCo
     protected override async Task OnDevicesRemovedAsync(List<string> removedMacAddresses)
     {
         // Send SignalR notifications for device removals
-        var tasks = removedMacAddresses.Select(mac => 
+        var tasks = removedMacAddresses.Select(mac =>
             _hub.Clients.All.SendAsync(DeviceHubMethods.DeviceRemoved, mac));
-        
+
         await Task.WhenAll(tasks);
     }
 }

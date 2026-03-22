@@ -2,9 +2,11 @@
 using GreeACLocalServer.Api.Hubs;
 using GreeACLocalServer.Api.Services;
 using GreeACLocalServer.UI.Services;
+using GreeACLocalServer.Device.Extensions;
 using Microsoft.AspNetCore.Mvc;
 using MudBlazor.Services;
 using Serilog;
+using GreeACLocalServer.Device.Services;
 
 namespace GreeACLocalServer.Api
 {
@@ -54,7 +56,7 @@ namespace GreeACLocalServer.Api
             {
                 configBuilder.AddJsonFile("/etc/greeac-localserver/appsettings.json", optional: true, reloadOnChange: true);
             }
-    
+
             configBuilder.AddJsonFile("appsettings.dev.json", optional: true, reloadOnChange: true)
                     .AddEnvironmentVariables();
         }
@@ -117,18 +119,17 @@ namespace GreeACLocalServer.Api
 
         private static void ConfigureCommonServices(IServiceCollection services, IConfiguration configuration)
         {
-            // Core services needed in both scenarios
-            services.AddSingleton<ICryptoService, CryptoService>();
-            services.AddSingleton<MessageHandlerService>();
+            // Core services needed in both scenarios            
+            services.AddGreeServices(configuration);
             services.AddSingleton<IDnsResolverService, DnsResolverService>();
-            services.AddSingleton<SocketHandlerService>();
+
             services.AddScoped<IDeviceConfigService, DeviceConfigService>();
             services.AddScoped<IConfigService, ConfigService>();
-            
+
             // Configuration options
             services.Configure<ServerOptions>(configuration.GetSection("Server"));
             services.Configure<DeviceManagerOptions>(configuration.GetSection("DeviceManager"));
-            
+
             // Background services
             services.AddHostedService<SocketHandlerBackgroundService>();
 
@@ -143,7 +144,7 @@ namespace GreeACLocalServer.Api
         private static void ConfigureCommonServicesWithUI(IServiceCollection services, IConfiguration configuration)
         {
             ConfigureCommonServices(services, configuration);
-            
+
             // UI-enabled DeviceManagerService with SignalR support
             services.AddSingleton<IInternalDeviceManagerService, DeviceManagerService>();
             services.AddSingleton<IDeviceManagerService>(x => x.GetRequiredService<IInternalDeviceManagerService>());
@@ -152,7 +153,7 @@ namespace GreeACLocalServer.Api
         private static void ConfigureCommonServicesHeadless(IServiceCollection services, IConfiguration configuration)
         {
             ConfigureCommonServices(services, configuration);
-            
+
             // Headless DeviceManagerService without SignalR dependency
             services.AddSingleton<IInternalDeviceManagerService, HeadlessDeviceManagerService>();
             services.AddSingleton<IDeviceManagerService>(x => x.GetRequiredService<IInternalDeviceManagerService>());
@@ -166,12 +167,12 @@ namespace GreeACLocalServer.Api
             services.AddSwaggerGen();
             services.AddResponseCompression();
             services.AddMudServices();
-            
+
             // Register server-side browser detection service
             //services.AddScoped<IBrowserDetectionService, ServerBrowserDetectionService>();
             services.AddScoped<IBrowserDetectionService, ClientBrowserDetectionService>();
-            
-            
+
+
             services.AddRazorComponents()
                 .AddInteractiveServerComponents()
                 .AddInteractiveWebAssemblyComponents();
@@ -186,10 +187,11 @@ namespace GreeACLocalServer.Api
                 // Log the forwarded headers for debugging
                 app.Use(async (context, next) =>
                 {
-                    Log.Debug("Request Scheme: {Scheme}, Host: {Host}, Headers: {@Headers}", 
-                        context.Request.Scheme, 
+                    Log.Debug("Request Scheme: {Scheme}, Host: {Host}, Headers: {@Headers}",
+                        context.Request.Scheme,
                         context.Request.Host,
-                        new { 
+                        new
+                        {
                             XForwardedProto = context.Request.Headers["X-Forwarded-Proto"].ToString(),
                             XForwardedFor = context.Request.Headers["X-Forwarded-For"].ToString(),
                             XForwardedHost = context.Request.Headers["X-Forwarded-Host"].ToString()
@@ -200,39 +202,39 @@ namespace GreeACLocalServer.Api
 
             // Minimal API endpoints under /api
             var api = app.MapGroup("/api");
-            api.MapGet("/devices", async (IInternalDeviceManagerService dms) =>
+            api.MapGet("/devices", async (Interfaces.IInternalDeviceManagerService dms) =>
             {
                 var list = await dms.GetAllDeviceStatesAsync();
                 return Results.Ok(list);
             });
-            api.MapGet("/devices/{mac}", async (string mac, IInternalDeviceManagerService dms) =>
+            api.MapGet("/devices/{mac}", async (string mac, Interfaces.IInternalDeviceManagerService dms) =>
             {
                 var device = await dms.GetAsync(mac);
                 return device is null
                     ? Results.NotFound()
                     : Results.Ok(device);
             });
-            api.MapDelete("/devices/{mac}", async (string mac, IInternalDeviceManagerService dms) =>
+            api.MapDelete("/devices/{mac}", async (string mac, Interfaces.IInternalDeviceManagerService dms) =>
             {
                 var removed = await dms.RemoveDeviceAsync(mac);
                 return removed
                     ? Results.Ok(new { Success = true, Message = $"Device {mac} removed successfully" })
                     : Results.NotFound(new { Success = false, Message = $"Device {mac} not found" });
             });
-            
+
             // Device configuration endpoints
             var deviceConfig = api.MapGroup("/device-config");
-            deviceConfig.MapPost("/status", async ([FromBody] DeviceStatusRequest request, IDeviceConfigService configService) =>
+            deviceConfig.MapPost("/status", async ([FromBody] QueryDeviceStatusRequest request, IDeviceConfigService configService) =>
             {
                 var result = await configService.QueryDeviceStatusAsync(request);
                 return Results.Ok(result);
             });
-            deviceConfig.MapPost("/set-name", async ([FromBody] SetDeviceNameRequest request, IDeviceConfigService configService) =>
+            deviceConfig.MapPost("/set-name", async ([FromBody] UpdateDeviceNameRequest request, IDeviceConfigService configService) =>
             {
                 var result = await configService.SetDeviceNameAsync(request);
                 return Results.Ok(result);
             });
-            deviceConfig.MapPost("/set-remote-host", async ([FromBody] SetRemoteHostRequest request, IDeviceConfigService configService) =>
+            deviceConfig.MapPost("/set-remote-host", async ([FromBody] UpdateRemoteHostRequest request, IDeviceConfigService configService) =>
             {
                 var result = await configService.SetRemoteHostAsync(request);
                 return Results.Ok(result);
@@ -267,7 +269,7 @@ namespace GreeACLocalServer.Api
 
             app.MapStaticAssets();
             app.MapRazorComponents<App>()
-                .AddInteractiveServerRenderMode()   
+                .AddInteractiveServerRenderMode()
                 .AddInteractiveWebAssemblyRenderMode()
                 .AddAdditionalAssemblies(typeof(GreeACLocalServer.UI._Imports).Assembly);
         }

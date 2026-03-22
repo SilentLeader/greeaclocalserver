@@ -96,6 +96,7 @@ csharp_preserve_single_line_blocks = true
 
 # Using preferences
 csharp_using_directive_placement = outside_namespace:suggestion
+csharp_organize_imports_on_save = true
 
 # Style preferences
 csharp_prefer_braces = true:warning
@@ -235,3 +236,6 @@ dotnet_naming_rule.type_parameters_should_be_prefixed_with_t.style = prefix_type
 dotnet_naming_symbols.type_parameters.applicable_kinds = type_parameter
 dotnet_naming_style.prefix_type_parameters_with_t_style.capitalization = pascal_case
 dotnet_naming_style.prefix_type_parameters_with_t_style.required_prefix = T
+
+# IDE0161: Convert to file-scoped namespace
+csharp_style_namespace_declarations = file_scoped:warning

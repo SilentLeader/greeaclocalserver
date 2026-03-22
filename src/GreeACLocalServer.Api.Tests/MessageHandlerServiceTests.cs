@@ -1,7 +1,8 @@
 using System.Globalization;
 using GreeACLocalServer.Api.Interfaces;
 using GreeACLocalServer.Api.Options;
-using GreeACLocalServer.Api.Services;
+using GreeACLocalServer.Device.Services;
+using GreeACLocalServer.Device.ValueObjects;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -48,7 +49,7 @@ public class MessageHandlerServiceTests
         var service = CreateService();
         var request = new Request.DefaultRequest
         {
-            Type = ValueObjects.CommandType.Discover,
+            Type = CommandType.Discover,
             MacAddress = "AABBCCDDEEFF"
         };
         var json = System.Text.Json.JsonSerializer.Serialize(request);
@@ -80,7 +81,7 @@ public class MessageHandlerServiceTests
         var encryptedPack = cryptoService!.Encrypt(System.Text.Json.JsonSerializer.Serialize(pack));
         var request = new GreeACLocalServer.Api.Request.DefaultRequest
         {
-            Type = GreeACLocalServer.Api.ValueObjects.CommandType.Pack,
+            Type = CommandType.Pack,
             MacAddress = "AABBCCDDEEFF",
             Pack = encryptedPack
         };
@@ -97,7 +98,7 @@ public class MessageHandlerServiceTests
         var service = CreateService();
         var request = new GreeACLocalServer.Api.Request.DefaultRequest
         {
-            Type = GreeACLocalServer.Api.ValueObjects.CommandType.Time,
+            Type = CommandType.Time,
             MacAddress = "AABBCCDDEEFF"
         };
         var json = System.Text.Json.JsonSerializer.Serialize(request);
@@ -114,7 +115,7 @@ public class MessageHandlerServiceTests
         var service = CreateService();
         var request = new GreeACLocalServer.Api.Request.DefaultRequest
         {
-            Type = GreeACLocalServer.Api.ValueObjects.CommandType.HeartBeat,
+            Type = CommandType.HeartBeat,
             MacAddress = "AABBCCDDEEFF"
         };
         var json = System.Text.Json.JsonSerializer.Serialize(request);
@@ -131,7 +132,7 @@ public class MessageHandlerServiceTests
         var service = CreateService();
         var request = new GreeACLocalServer.Api.Request.DefaultRequest
         {
-            Type = GreeACLocalServer.Api.ValueObjects.CommandType.Time,
+            Type = CommandType.Time,
             MacAddress = "AABBCCDDEEFF"
         };
         var json = System.Text.Json.JsonSerializer.Serialize(request);

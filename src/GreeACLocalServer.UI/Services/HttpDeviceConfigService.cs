@@ -17,12 +17,12 @@ public class HttpDeviceConfigService : IDeviceConfigService
         _httpClient = httpClient;
     }
 
-    public async Task<DeviceStatusResponse> QueryDeviceStatusAsync(DeviceStatusRequest request, CancellationToken cancellationToken = default)
+    public async Task<DeviceStatusResponse> QueryDeviceStatusAsync(QueryDeviceStatusRequest request, CancellationToken cancellationToken = default)
     {
         try
         {
             var response = await _httpClient.PostAsJsonAsync("api/device-config/status", request, cancellationToken);
-            
+
             if (response.IsSuccessStatusCode)
             {
                 var result = await response.Content.ReadFromJsonAsync<DeviceStatusResponse>(cancellationToken: cancellationToken);
@@ -52,12 +52,12 @@ public class HttpDeviceConfigService : IDeviceConfigService
         }
     }
 
-    public async Task<DeviceOperationResponse> SetDeviceNameAsync(SetDeviceNameRequest request, CancellationToken cancellationToken = default)
+    public async Task<DeviceOperationResponse> SetDeviceNameAsync(UpdateDeviceNameRequest request, CancellationToken cancellationToken = default)
     {
         try
         {
             var response = await _httpClient.PostAsJsonAsync("api/device-config/set-name", request, cancellationToken);
-            
+
             if (response.IsSuccessStatusCode)
             {
                 var result = await response.Content.ReadFromJsonAsync<DeviceOperationResponse>(cancellationToken: cancellationToken);
@@ -87,12 +87,12 @@ public class HttpDeviceConfigService : IDeviceConfigService
         }
     }
 
-    public async Task<DeviceOperationResponse> SetRemoteHostAsync(SetRemoteHostRequest request, CancellationToken cancellationToken = default)
+    public async Task<DeviceOperationResponse> SetRemoteHostAsync(UpdateRemoteHostRequest request, CancellationToken cancellationToken = default)
     {
         try
         {
             var response = await _httpClient.PostAsJsonAsync("api/device-config/set-remote-host", request, cancellationToken);
-            
+
             if (response.IsSuccessStatusCode)
             {
                 var result = await response.Content.ReadFromJsonAsync<DeviceOperationResponse>(cancellationToken: cancellationToken);

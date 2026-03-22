@@ -1,21 +1,31 @@
-using System.Threading.Tasks;
-using Microsoft.Extensions.Hosting;
+using GreeACLocalServer.Device.Interfaces;
+using GreeACLocalServer.Device.Models;
 
-namespace GreeACLocalServer.Api.Services
+namespace GreeACLocalServer.Api.Services;
+
+public class SocketHandlerBackgroundService(
+    ISocketHandlerService socketHandlerService,
+    IInternalDeviceManagerService deviceManagerService,
+    IDeviceEventHandlerService deviceEventHandlerService) : BackgroundService
 {
-    public class SocketHandlerBackgroundService(SocketHandlerService socketHandlerService) : BackgroundService
+    private readonly ISocketHandlerService _socketHandlerService = socketHandlerService;
+
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        private readonly SocketHandlerService _socketHandlerService = socketHandlerService;
+        deviceEventHandlerService.OnDeviceConnected += OnDeviceConnected;
+        await Task.Run(() => _socketHandlerService.Start(), stoppingToken);
+    }
 
-        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-        {
-            await Task.Run(() => _socketHandlerService.Start(), stoppingToken);
-        }
+    public override async Task StopAsync(CancellationToken cancellationToken)
+    {
+        _socketHandlerService.Stop();
+        deviceEventHandlerService.OnDeviceConnected -= OnDeviceConnected;
+        await base.StopAsync(cancellationToken);
+    }
 
-        public override async Task StopAsync(CancellationToken cancellationToken)
-        {
-            _socketHandlerService.Stop();
-            await base.StopAsync(cancellationToken);
-        }
+    private void OnDeviceConnected(object? sender, DeviceConnectedMessage message)
+    {
+        deviceManagerService.UpdateOrAddAsync(message.MacAddress, message.IPAddress);
     }
 }
