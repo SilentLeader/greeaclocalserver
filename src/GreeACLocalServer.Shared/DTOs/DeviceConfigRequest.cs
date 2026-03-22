@@ -8,17 +8,17 @@ public class DeviceConfigRequest
     public string IpAddress { get; set; } = string.Empty;
 }
 
-public class DeviceStatusRequest : DeviceConfigRequest
+public class QueryDeviceStatusRequest : DeviceConfigRequest
 {
 }
 
-public class SetDeviceNameRequest : DeviceConfigRequest
+public class UpdateDeviceNameRequest : DeviceConfigRequest
 {
     [Required]
     public string DeviceName { get; set; } = string.Empty;
 }
 
-public class SetRemoteHostRequest : DeviceConfigRequest
+public class UpdateRemoteHostRequest : DeviceConfigRequest
 {
     [Required]
     public string RemoteHost { get; set; } = string.Empty;

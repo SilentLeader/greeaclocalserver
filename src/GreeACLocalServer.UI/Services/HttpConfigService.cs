@@ -1,21 +1,12 @@
-using System;
-using System.Net.Http;
 using System.Net.Http.Json;
-using System.Threading;
-using System.Threading.Tasks;
 using GreeACLocalServer.Shared.DTOs;
 using GreeACLocalServer.Shared.Interfaces;
 
 namespace GreeACLocalServer.UI.Services;
 
-public class HttpConfigService : IConfigService
+public class HttpConfigService(HttpClient httpClient) : IConfigService
 {
-    private readonly HttpClient _httpClient;
-
-    public HttpConfigService(HttpClient httpClient)
-    {
-        _httpClient = httpClient;
-    }
+    private readonly HttpClient _httpClient = httpClient;
 
     public async Task<ServerConfigResponse> GetServerConfigAsync(CancellationToken cancellationToken = default)
     {

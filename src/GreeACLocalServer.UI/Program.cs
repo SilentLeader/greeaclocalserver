@@ -1,11 +1,7 @@
-using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
-using System;
-using System.Net.Http;
 using GreeACLocalServer.Shared.Interfaces;
 using GreeACLocalServer.UI.Services;
 using MudBlazor.Services;
-using MudBlazor;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 

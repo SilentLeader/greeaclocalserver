@@ -1,10 +1,4 @@
-using GreeACLocalServer.Api.Options;
-using GreeACLocalServer.Api.Services;
-using GreeACLocalServer.Shared.Contracts;
-using GreeACLocalServer.Shared.Interfaces;
-using Microsoft.Extensions.Options;
 using System.Collections.Concurrent;
-using GreeACLocalServer.Api.Models;
 
 namespace GreeACLocalServer.Api.Services;
 
@@ -12,16 +6,24 @@ namespace GreeACLocalServer.Api.Services;
 /// Base device manager service that provides core functionality without SignalR dependencies.
 /// Can be used directly for headless mode or inherited by DeviceManagerService for UI mode.
 /// </summary>
-public class HeadlessDeviceManagerService(IOptions<DeviceManagerOptions> options, IDnsResolverService dnsResolver) : IInternalDeviceManagerService
+public class HeadlessDeviceManagerService(
+    IOptionsMonitor<DeviceManagerOptions> options,
+    IDnsResolverService dnsResolver) : IInternalDeviceManagerService
+
 {
     protected readonly ConcurrentDictionary<string, AcDeviceState> _deviceStates = new();
-    protected readonly DeviceManagerOptions _options = options.Value;
+    protected readonly DeviceManagerOptions _options = options.CurrentValue;
     protected readonly IDnsResolverService _dnsResolver = dnsResolver;
 
-    public virtual async Task UpdateOrAddAsync(string macAddress, string ipAddress)
+    public virtual async Task UpdateOrAddAsync(string macAddress, string? ipAddress)
     {
+        if (string.IsNullOrWhiteSpace(ipAddress))
+        {
+            return;
+        }
+
         var dnsName = await _dnsResolver.ResolveDnsNameAsync(ipAddress);
-        
+
         var state = _deviceStates.AddOrUpdate(macAddress,
             key => new AcDeviceState
             {
@@ -81,11 +83,11 @@ public class HeadlessDeviceManagerService(IOptions<DeviceManagerOptions> options
 
     public virtual async Task<bool> RemoveDeviceAsync(string macAddress, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(macAddress)) 
+        if (string.IsNullOrWhiteSpace(macAddress))
         {
             return false;
         }
-        
+
         if (_deviceStates.TryRemove(macAddress, out _))
         {
             // Notify derived classes (e.g., SignalR notifications)

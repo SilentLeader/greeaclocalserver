@@ -36,5 +36,6 @@
   <ItemGroup>
     <ProjectReference Include="..\GreeACLocalServer.UI\GreeACLocalServer.UI.csproj" />
     <ProjectReference Include="..\GreeACLocalServer.Shared\GreeACLocalServer.Shared.csproj" />
+    <ProjectReference Include="..\GreeACLocalServer.Device\GreeACLocalServer.Device.csproj" />
   </ItemGroup>
 </Project>

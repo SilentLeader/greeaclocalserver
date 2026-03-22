@@ -1,11 +1,5 @@
-using System;
-using System.Collections.Generic;
 using System.Net;
-using System.Net.Http;
 using System.Net.Http.Json;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using GreeACLocalServer.Shared.Contracts;
 using GreeACLocalServer.Shared.Interfaces;
 
@@ -24,7 +18,7 @@ public class HttpDeviceManagerService(HttpClient httpClient) : IDeviceManagerSer
         }
         catch
         {
-            return Enumerable.Empty<DeviceDto>();
+            return [];
         }
     }
 

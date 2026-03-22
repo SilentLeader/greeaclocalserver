@@ -24,7 +24,7 @@ public class DeviceConfigServiceTests
         _mockLogger = new Mock<ILogger<DeviceConfigService>>();
         _mockCryptoService = new Mock<ICryptoService>();
         _mockServerOptions = new Mock<IOptionsMonitor<ServerOptions>>();
-        
+
         _deviceConfigService = new DeviceConfigService(
             _mockLogger.Object,
             _mockCryptoService.Object,
@@ -38,7 +38,7 @@ public class DeviceConfigServiceTests
         var serverOptions = new ServerOptions { EnableManagement = false };
         _mockServerOptions.Setup(x => x.CurrentValue).Returns(serverOptions);
 
-        var request = new SetDeviceNameRequest
+        var request = new UpdateDeviceNameRequest
         {
             IpAddress = "192.168.1.100",
             DeviceName = "TestDevice"
@@ -60,7 +60,7 @@ public class DeviceConfigServiceTests
         var serverOptions = new ServerOptions { EnableManagement = false };
         _mockServerOptions.Setup(x => x.CurrentValue).Returns(serverOptions);
 
-        var request = new SetRemoteHostRequest
+        var request = new UpdateRemoteHostRequest
         {
             IpAddress = "192.168.1.100",
             RemoteHost = "example.com"
@@ -82,7 +82,7 @@ public class DeviceConfigServiceTests
         var serverOptions = new ServerOptions { EnableManagement = false };
         _mockServerOptions.Setup(x => x.CurrentValue).Returns(serverOptions);
 
-        var request = new DeviceStatusRequest
+        var request = new QueryDeviceStatusRequest
         {
             IpAddress = "192.168.1.100"
         };

@@ -5,9 +5,9 @@ using GreeACLocalServer.Shared.ValueObjects;
 
 namespace GreeACLocalServer.Api.Hubs;
 
-public class DeviceHub(IInternalDeviceManagerService deviceManager) : Hub
+public class DeviceHub(Interfaces.IInternalDeviceManagerService deviceManager) : Hub
 {
-    private readonly IInternalDeviceManagerService _deviceManager = deviceManager;
+    private readonly Interfaces.IInternalDeviceManagerService _deviceManager = deviceManager;
 
     public override async Task OnConnectedAsync()
     {
