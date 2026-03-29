@@ -1,5 +1,6 @@
-using Microsoft.AspNetCore.HttpOverrides;
 using System.Net;
+using Microsoft.AspNetCore.HttpOverrides;
+using IPNetwork = System.Net.IPNetwork;
 
 namespace GreeACLocalServer.Api.Options
 {
@@ -16,8 +17,8 @@ namespace GreeACLocalServer.Api.Options
         public void ApplyToForwardedHeadersOptions(ForwardedHeadersOptions options)
         {
             // Set forwarded headers
-            options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | 
-                                      ForwardedHeaders.XForwardedProto | 
+            options.ForwardedHeaders = ForwardedHeaders.XForwardedFor |
+                                      ForwardedHeaders.XForwardedProto |
                                       ForwardedHeaders.XForwardedHost;
 
             // Set header names
@@ -37,12 +38,12 @@ namespace GreeACLocalServer.Api.Options
             }
 
             // Clear and configure known networks
-            options.KnownNetworks.Clear();
+            options.KnownIPNetworks.Clear();
             foreach (var network in KnownNetworks)
             {
                 if (TryParseNetwork(network, out var ipNetwork) && ipNetwork != null)
                 {
-                    options.KnownNetworks.Add(ipNetwork);
+                    options.KnownIPNetworks.Add(ipNetwork.Value);
                 }
             }
 
@@ -54,26 +55,39 @@ namespace GreeACLocalServer.Api.Options
             }
         }
 
-        private static bool TryParseNetwork(string network, out Microsoft.AspNetCore.HttpOverrides.IPNetwork? ipNetwork)
+        private static bool TryParseNetwork(string network, out IPNetwork? ipNetwork)
         {
             ipNetwork = null;
-            
+
             if (string.IsNullOrEmpty(network))
+            {
                 return false;
+            }
+
 
             var parts = network.Split('/');
             if (parts.Length != 2)
+            {
                 return false;
+            }
+
 
             if (!IPAddress.TryParse(parts[0], out var address))
+            {
                 return false;
+            }
+
 
             if (!int.TryParse(parts[1], out var prefixLength))
+            {
+
                 return false;
+            }
+
 
             try
             {
-                ipNetwork = new Microsoft.AspNetCore.HttpOverrides.IPNetwork(address, prefixLength);
+                ipNetwork = new IPNetwork(address, prefixLength);
                 return true;
             }
             catch

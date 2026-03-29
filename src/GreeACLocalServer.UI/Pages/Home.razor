@@ -201,7 +201,7 @@ else
 
     private async Task RemoveDevice(DeviceDto device)
     {
-        var result = await DialogService.ShowMessageBox(
+        var result = await DialogService.ShowMessageBoxAsync(
             "Confirm Device Removal",
             $"Are you sure you want to remove device '{device.DNSName}' ({DeviceHelpers.FormatMacAddress(device.MacAddress)})?",
             yesText: "Remove", cancelText: "Cancel");
@@ -212,7 +212,7 @@ else
             if (!success)
             {
                 // Show error message if removal failed
-                await DialogService.ShowMessageBox(
+                await DialogService.ShowMessageBoxAsync(
                     "Remove Failed",
                     $"Failed to remove device '{device.DNSName}'. The device may have already been removed.",
                     "OK");
