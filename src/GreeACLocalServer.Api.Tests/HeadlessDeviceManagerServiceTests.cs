@@ -10,7 +10,7 @@ namespace GreeACLocalServer.Api.Tests;
 
 public class HeadlessDeviceManagerServiceTests
 {
-    private readonly Mock<IOptions<DeviceManagerOptions>> _mockOptions;
+    private readonly Mock<IOptionsMonitor<DeviceManagerOptions>> _mockOptions;
     private readonly Mock<IDnsResolverService> _mockDnsResolver;
     private readonly HeadlessDeviceManagerService _deviceManagerService;
     private readonly DeviceManagerOptions _deviceManagerOptions;
@@ -22,8 +22,8 @@ public class HeadlessDeviceManagerServiceTests
             DeviceTimeoutMinutes = 30
         };
 
-        _mockOptions = new Mock<IOptions<DeviceManagerOptions>>();
-        _mockOptions.Setup(x => x.Value).Returns(_deviceManagerOptions);
+        _mockOptions = new Mock<IOptionsMonitor<DeviceManagerOptions>>();
+        _mockOptions.Setup(x => x.CurrentValue).Returns(_deviceManagerOptions);
 
         _mockDnsResolver = new Mock<IDnsResolverService>();
         _mockDnsResolver.Setup(x => x.ResolveDnsNameAsync(It.IsAny<string>()))
@@ -113,7 +113,7 @@ public class HeadlessDeviceManagerServiceTests
         var ipAddress = "192.168.1.100";
 
         await _deviceManagerService.UpdateOrAddAsync(macAddress, ipAddress);
-        
+
         // Wait a bit to ensure timeout
         await Task.Delay(100);
 
@@ -167,7 +167,7 @@ public class HeadlessDeviceManagerServiceTests
 
         // Reset DNS resolver call count
         _mockDnsResolver.Reset();
-        
+
         // Act
         var devices = await _deviceManagerService.GetAllDeviceStatesAsync();
 
@@ -181,7 +181,7 @@ public class HeadlessDeviceManagerServiceTests
     public void Constructor_WithNullOptions_ThrowsNullReferenceException()
     {
         // Arrange, Act & Assert
-        Assert.Throws<NullReferenceException>(() => 
+        Assert.Throws<NullReferenceException>(() =>
             new HeadlessDeviceManagerService(null!, _mockDnsResolver.Object));
     }
 
@@ -191,7 +191,7 @@ public class HeadlessDeviceManagerServiceTests
         // Arrange, Act & Assert - Null DNS resolver doesn't fail immediately in constructor
         var service = new HeadlessDeviceManagerService(_mockOptions.Object, null!);
         Assert.NotNull(service);
-        
+
         // But would fail when actually using DNS resolution
         // We don't test that here as it would require async testing
     }
@@ -204,7 +204,7 @@ public class HeadlessDeviceManagerServiceTests
         var ipAddress = "192.168.1.100";
 
         await _deviceManagerService.UpdateOrAddAsync(macAddress, ipAddress);
-        
+
         // Verify device exists
         var deviceBefore = await _deviceManagerService.GetAsync(macAddress);
         Assert.NotNull(deviceBefore);
