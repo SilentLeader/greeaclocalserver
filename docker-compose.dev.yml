@@ -3,22 +3,31 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      target: build  # Stop at build stage for development
+      target: final  # Use final stage for development container
     container_name: gree-ac-local-server-dev
     restart: unless-stopped
     ports:
-      - "5000:5000"  # TCP port for GREE devices
-      - "5100:5100"  # Web UI port
+      - "5000:5000"  # TCP port for GREE devices (required)
+      - "1813:1813"  # TCP port for GREE devices TLS
+      - "5100:5100"  # Web UI port (HTTP)
+      - "5443:5443"  # Web UI port (TLS/HTTPS)
       - "5101:5101"  # Additional port for debugging
     environment:
       # Development Configuration
       - ASPNETCORE_ENVIRONMENT=Development
       - DOTNET_ENVIRONMENT=Development
-      - Server__Port=5000
-      - Server__DomainName=gree.dev.local
-      - Server__ExternalIp=127.0.0.1
-      - Server__EnableUI=true
-      - Server__CryptoKey=a3K8Bx%2r8Y7#xDh
+      
+      # Kestrel Configuration (Web UI server)
+      - ASPNETCORE_URLS=http://+:5100;https://+:5443
+      
+      # GREE Server Configuration
+      - GreeServer__ServerOptions__DomainName=gree.dev.local
+      - GreeServer__ServerOptions__ExternalIp=127.0.0.1
+      - GreeServer__ServerOptions__TLSEnabled=true
+      - GreeServer__EncryptionOptions__DefaultCryptoKey=a3K8Bx%2r8Y7#xDh
+      
+      # UI Configuration
+      - GreeServer__EnableUI=true
       
       # Development specific
       - DOTNET_USE_POLLING_FILE_WATCHER=true

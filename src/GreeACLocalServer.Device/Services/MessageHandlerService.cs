@@ -75,14 +75,14 @@ internal class MessageHandlerService(ICryptoService cryptoService, IOptions<Serv
         var discoverResponse = new DiscoverResponse
         {
             ServerHost = _deviceHandlerOptions.DomainName,
-            ServerPort = ServerOption.HTTP_PORT,
+            ServerPort = ServerOption.PORT,
             HostOrIpAddress = _deviceHandlerOptions.ExternalIp,
             Ip = _deviceHandlerOptions.ExternalIp,
             SecondaryIp = _deviceHandlerOptions.ExternalIp,
             Protocol = "TCP",
             ResponseType = ResponseType.Server,
-            TcpPort = ServerOption.HTTP_PORT,
-            UdpPort = ServerOption.HTTP_PORT
+            TcpPort = ServerOption.PORT,
+            UdpPort = ServerOption.PORT
         };
 
         var rawPackData = JsonSerializer.Serialize(discoverResponse, _jsonSerializerOptions);

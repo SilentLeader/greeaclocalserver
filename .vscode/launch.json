@@ -3,19 +3,19 @@
     // Hover to view descriptions of existing attributes.
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
-    "configurations": [        
+    "configurations": [
         {
             "name": "Debug",
             "type": "blazorwasm",
             "request": "launch",
             "hosted": true,
-            "program": "${workspaceFolder}/src/GreeACLocalServer.Api/bin/Debug/net9.0/GreeACLocalServer.Api.dll",
+            "program": "${workspaceFolder}/src/GreeACLocalServer.Api/bin/Debug/net10.0/GreeACLocalServer.Api.dll",
             "cwd": "${workspaceFolder}/src/GreeACLocalServer.Api",
             "browser": "chrome",
             "url": "http://localhost:5100",
             "env": {
                 "ASPNETCORE_ENVIRONMENT": "Development"
-            },            
+            },
             "dotNetConfig": {
                 "justMyCode": true,
                 "logging": {
@@ -27,7 +27,7 @@
             "name": "Debug backend",
             "type": "coreclr",
             "request": "launch",
-            "program": "${workspaceFolder}/src/GreeACLocalServer.Api/bin/Debug/net9.0/GreeACLocalServer.Api.dll",
+            "program": "${workspaceFolder}/src/GreeACLocalServer.Api/bin/Debug/net10.0/GreeACLocalServer.Api.dll",
             "args": [],
             "cwd": "${workspaceFolder}/src/GreeACLocalServer.Api",
             "env": {
@@ -72,11 +72,16 @@
     "compounds": [
         {
             "name": "Debug with Hot Reload",
-            "configurations": [ "Watch", "Attach" ]
+            "configurations": [
+                "Watch",
+                "Attach"
+            ]
         },
         {
             "name": "Debug with Build",
-            "configurations": [ "Debug" ],
+            "configurations": [
+                "Debug"
+            ],
             "preLaunchTask": "build",
         }
     ]

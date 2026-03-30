@@ -2,7 +2,7 @@
 
 This project provides a **modern, feature-rich local replacement server for GREE air conditioners** that normally require internet connectivity to communicate with GREE's cloud servers. The solution allows GREE AC units to function completely offline by implementing a local server that mimics the original GREE server functionality.
 
-**Based on the excellent foundation of [GreeAC-DummyServer](https://github.com/emtek-at/GreeAC-DummyServer)**, this project has been completely rewritten and modernized with .NET 9, featuring a comprehensive web UI, real-time device monitoring, and advanced management capabilities.
+**Based on the excellent foundation of [GreeAC-DummyServer](https://github.com/emtek-at/GreeAC-DummyServer)**, this project has been completely rewritten and modernized with .NET 10, featuring a comprehensive web UI, real-time device monitoring, advanced management capabilities, and TLS/HTTPS support.
 
 ## 🌟 **Features**
 
@@ -45,9 +45,9 @@ This project provides a **modern, feature-rich local replacement server for GREE
 ## 🚀 **Installation**
 
 ### **Prerequisites**
-- **.NET 9 Runtime** (for running) or SDK (for building)
+- **.NET 10 Runtime** (for running) or SDK (for building)
 - **DNS Server Configuration** - Add an entry pointing to your server's IP address
-- **Network Access** - Server must be accessible on port 5000 and 5100
+- **Network Access** - Server must be accessible on port 5000, 5100 (HTTP), and optionally 1813 (TLS)
 
 ### **Option 1: Docker (Recommended)**
 
@@ -58,7 +58,7 @@ git clone https://github.com/SilentLeader/greeaclocalserver.git
 cd greeaclocalserver
 
 # Edit docker-compose.yml to set your domain and IP
-# Update Server__DomainName and Server__ExternalIp values
+# Update GreeServer__ServerOptions__DomainName and GreeServer__ServerOptions__ExternalIp values
 
 # Start the server
 ./docker-run.sh
@@ -70,14 +70,36 @@ cd greeaclocalserver
 docker run -d \
   --restart=always \
   --name gree-ac-server \
-  -e Server__DomainName=gree.example.com \
-  -e Server__ExternalIp=192.168.1.100 \
-  -e Server__EnableUI=true \
-  -e Server__EnableManagement=true \
+  -e GreeServer__ServerOptions__DomainName=gree.example.com \
+  -e GreeServer__ServerOptions__ExternalIp=192.168.1.100 \
+  -e GreeServer__EnableUI=true \
   -p 5000:5000 \
+  -p 1813:1813 \
   -p 5100:5100 \
   gree-ac-local-server:latest
 ```
+
+#### **TLS Configuration**
+To enable TLS/HTTPS for the web interface, set `GreeServer__ServerOptions__TLSEnabled=true` and provide certificate configuration:
+
+```bash
+docker run -d \
+  --restart=always \
+  --name gree-ac-server-tls \
+  -e GreeServer__ServerOptions__DomainName=gree.example.com \
+  -e GreeServer__ServerOptions__ExternalIp=192.168.1.100 \
+  -e GreeServer__EnableUI=true \
+  -e GreeServer__ServerOptions__TLSEnabled=true \
+  -e GreeServer__EncryptionOptions__TLSCertificatePath=/app/certs/server.crt \
+  -e GreeServer__EncryptionOptions__TLSCertificatePassword=your-cert-password \
+  -p 5000:5000 \
+  -p 1813:1813 \
+  -p 5100:5100 \
+  -v /path/to/certs:/app/certs:ro \
+  gree-ac-local-server:latest
+```
+
+Access the web interface via HTTPS at `http://your-server-ip:5100`.
 
 #### **Building Docker Image Locally**
 ```bash
@@ -87,6 +109,28 @@ docker run -d \
 
 # Run with docker-compose
 docker-compose up -d
+```
+
+#### **Headless Mode (No Web UI)**
+For deployments without a web interface, set `GreeServer__EnableUI=false`:
+```bash
+docker run -d \
+  --restart=always \
+  --name gree-ac-server \
+  -e GreeServer__ServerOptions__DomainName=gree.example.com \
+  -e GreeServer__ServerOptions__ExternalIp=192.168.1.100 \
+  -e GreeServer__EnableUI=false \
+  -p 5000:5000 \
+  -p 1813:1813 \
+  gree-ac-local-server:latest
+```
+
+In headless mode, only the TCP server runs on port 5000 for GREE device communication. The web UI is disabled to reduce resource usage and attack surface.
+
+#### **Development Mode**
+For development with hot reload, use `docker-compose.dev.yml`:
+```bash
+docker-compose -f docker-compose.dev.yml up -d
 ```
 
 ### **Option 2: Bare Metal**
@@ -225,16 +269,20 @@ For production deployments, it's recommended to run the application as a system 
 
 When running as a service, ensure:
 - **Port 5000** (TCP) - GREE device communication (required)
+- **Port 1813** (TCP) - GREE device TLS communication (optional)
 - **Port 5100** (HTTP) - Web interface (if EnableUI=true)
+- **Port 5443** (TCP) - Web interface TLS (optional)
 
 **Firewall configuration:**
 ```bash
 # Linux (ufw)
 sudo ufw allow 5000/tcp
+sudo ufw allow 1813/tcp
 sudo ufw allow 5100/tcp
 
 # Linux (firewalld)
 sudo firewall-cmd --permanent --add-port=5000/tcp
+sudo firewall-cmd --permanent --add-port=1813/tcp
 sudo firewall-cmd --permanent --add-port=5100/tcp
 sudo firewall-cmd --reload
 ```
@@ -242,6 +290,7 @@ sudo firewall-cmd --reload
 ```powershell
 # Windows PowerShell (as Administrator)
 New-NetFirewallRule -DisplayName "GreeAC Server TCP" -Direction Inbound -Protocol TCP -LocalPort 5000
+New-NetFirewallRule -DisplayName "GreeAC Server TLS" -Direction Inbound -Protocol TCP -LocalPort 1813
 New-NetFirewallRule -DisplayName "GreeAC Server Web" -Direction Inbound -Protocol TCP -LocalPort 5100
 ```
 
@@ -252,33 +301,42 @@ The application is configured via `appsettings.json`. Here are the key settings:
 ### **Server Configuration**
 ```json
 {
+  "GreeServer": {
+    "ServerOptions": {
+      "DomainName": "gree.example.com",   // Domain name pointed to your server
+      "ExternalIp": "192.168.1.100",      // IP address of your server
+      "TLSEnabled": true,                  // Enable TLS for secure connections
+      "ListenIPAddresses": []              // Specific IPs to bind to (empty = all)
+    },
+    "EncryptionOptions": {
+      "DefaultCryptoKey": "a3K8Bx%2r8Y7#xDh",  // GREE encryption key (default works)
+      "TLSCertificateAutoCreate": true,         // Auto-create TLS certificate if needed
+      "TLSCertificatePath": "",                 // Path to custom TLS certificate
+      "TLSCertificatePassword": ""              // Password for TLS certificate
+    }
+  },
   "Server": {
-    "Port": 5000,                    // TCP port for GREE devices (must be 5000)
-    "DomainName": "gree.example.com", // Domain name pointed to your server
-    "ExternalIp": "192.168.1.100",   // IP address of your server
-    "ListenIPAddresses": [],          // Specific IPs to bind to (empty = all)
-    "CryptoKey": "a3K8Bx%2r8Y7#xDh", // GREE encryption key (default works)
-    "EnableUI": true,                 // Enable/disable web interface
-    "EnableManagement": true          // Enable/disable device management features
+    "EnableUI": true,                      // Enable/disable web interface
+    "EnableManagement": true               // Enable/disable device management features
   }
 }
 ```
 
 ### **Required Settings**
 
-#### **`DomainName`**
+#### **`GreeServer.ServerOptions.DomainName`**
 - **Purpose**: The domain name that GREE devices will connect to
 - **Setup**: Create a DNS entry pointing this domain to your server's IP
 - **Example**: `"gree.example.com"` → Points to `192.168.1.100`
 - **Important**: GREE devices are configured to connect to specific domains
 
-#### **`ExternalIp`** 
+#### **`GreeServer.ServerOptions.ExternalIp`** 
 - **Purpose**: The IP address where your server is accessible
 - **Usage**: Must match the IP address that the DNS entry points to
 - **Example**: `"192.168.1.100"` (your server's LAN IP)
 - **Note**: Use the actual IP address, not `localhost` or `127.0.0.1`
 
-#### **`EnableUI`**
+#### **`Server.EnableUI`**
 - **Purpose**: Controls whether the web interface is available
 - **Values**: 
   - `true` - Web UI available at `http://your-server:5100`
@@ -287,7 +345,7 @@ The application is configured via `appsettings.json`. Here are the key settings:
   - Set to `false` for headless/embedded deployments
   - Set to `true` for monitoring and management
 
-#### **`EnableManagement`**
+#### **`Server.EnableManagement`**
 - **Purpose**: Controls whether device management features are available
 - **Values**: 
   - `true` - Device configuration features enabled (default)
@@ -313,6 +371,13 @@ The application is configured via `appsettings.json`. Here are the key settings:
         "Url": "http://*:5100"        // Web UI port
       }
     }
+  },
+  "Serilog": {
+    "MinimumLevel": "Information",   // Logging level (Debug, Information, Warning, Error)
+    "WriteTo": [
+      {"Name": "Console"},           // Output to console
+      {"Name": "File"}               // Output to file (Production only)
+    ]
   }
 }
 ```
@@ -615,6 +680,60 @@ For high-traffic scenarios, consider:
 - **Adjust timeout values** in configuration
 - **Monitor memory usage** and adjust limits
 - **Use dedicated network interface** if available
+
+## 🐳 **Docker Deployment**
+
+### **Environment Variables**
+
+The following environment variables can be used to configure the container:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ASPNETCORE_ENVIRONMENT` | `Production` | ASP.NET Core environment (Development/Production) |
+| `ASPNETCORE_URLS` | `http://+:5100;https://+:5443` | Kestrel URLs for web UI (HTTP and TLS) |
+| `GreeServer__ServerOptions__DomainName` | `gree.local.server` | Domain name for DNS configuration |
+| `GreeServer__ServerOptions__ExternalIp` | `127.0.0.1` | Server IP address |
+| `GreeServer__EnableUI` | `true` | Enable/disable web interface |
+| `GreeServer__ServerOptions__TLSEnabled` | `false` | Enable TLS/HTTPS for web UI |
+| `DeviceManager__DeviceTimeoutMinutes` | `60` | Device timeout in minutes |
+
+### **Docker Compose**
+
+For easy deployment, use the provided `docker-compose.yml`:
+
+```bash
+# Edit docker-compose.yml to configure your domain and IP
+nano docker-compose.yml
+
+# Start the server
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop the server
+docker-compose down
+```
+
+### **Development Mode**
+
+For development with hot reload, use `docker-compose.dev.yml`:
+
+```bash
+docker-compose -f docker-compose.dev.yml up -d
+```
+
+### **TLS/HTTPS Configuration**
+
+To enable TLS/HTTPS for the web interface:
+
+1. Set `GreeServer__ServerOptions__TLSEnabled=true` in your environment variables or docker-compose.yml
+2. Provide certificate configuration via environment variables:
+   - `GreeServer__EncryptionOptions__TLSCertificatePath`: Path to the certificate file inside the container
+   - `GreeServer__EncryptionOptions__TLSCertificatePassword`: Password for the certificate
+3. Mount your certificates volume: `-v /path/to/certs:/app/certs:ro`
+
+Access the web interface via HTTPS at `https://your-server-ip:5443`.
 
 ## 🧪 **Development**
 
