@@ -7,6 +7,8 @@ using GreeACLocalServer.Device.Interfaces;
 using GreeACLocalServer.Device.ValueObjects;
 using Microsoft.Extensions.Options;
 using GreeACLocalServer.Device.Models;
+using System.Security.Cryptography.X509Certificates;
+using System.Net.Security;
 
 namespace GreeACLocalServer.Device.Services;
 
@@ -15,13 +17,16 @@ internal class SocketHandlerService(
     IMessageHandlerService greeHandler,
     IOptions<ServerOptions> serverOptions,
     IDeviceEventPublisher deviceEventPublisher,
+    ICryptoService cryptoService,
     ILogger<SocketHandlerService> logger) : ISocketHandlerService
 {
     private readonly ConcurrentBag<TcpListener> _servers = [];
     private volatile bool _isRunning;
+    private X509Certificate2? _tlsCertificate;
+
     private readonly IMessageHandlerService _greeHandler = greeHandler;
     private readonly IDeviceEventPublisher _deviceEventPublisher = deviceEventPublisher;
-
+    private readonly ICryptoService _cryptoService = cryptoService;
     private readonly ServerOptions _serverOptions = serverOptions.Value;
     private readonly ILogger<SocketHandlerService> _logger = logger;
 
@@ -30,16 +35,32 @@ internal class SocketHandlerService(
 
     public void Start()
     {
+        _logger.LogDebug("Gree AC server starting...");
+        if (_serverOptions.TLSEnabled)
+        {
+            _logger.LogDebug("GREE device TLS listener certificate loading...");
+            _tlsCertificate = _cryptoService.GetCertificate(_serverOptions.DomainName);
+            _logger.LogDebug("GREE device TLS listener certificate loaded. (Common name: {Subject})", _tlsCertificate.Subject);
+        }
+
         if (_serverOptions.ListenIPAddresses.Any())
         {
             foreach (var ip in _serverOptions.ListenIPAddresses)
             {
-                _servers.Add(new TcpListener(IPAddress.Parse(ip), ServerOption.HTTP_PORT));
+                _servers.Add(new TcpListener(IPAddress.Parse(ip), ServerOption.PORT));
+                if (_serverOptions.TLSEnabled)
+                {
+                    _servers.Add(new TcpListener(IPAddress.Parse(ip), ServerOption.TLS_PORT));
+                }
             }
         }
         else
         {
-            _servers.Add(new TcpListener(IPAddress.Any, ServerOption.HTTP_PORT));
+            _servers.Add(new TcpListener(IPAddress.Any, ServerOption.PORT));
+            if (_serverOptions.TLSEnabled)
+            {
+                _servers.Add(new TcpListener(IPAddress.Any, ServerOption.TLS_PORT));
+            }
         }
 
         foreach (var server in _servers)
@@ -53,13 +74,18 @@ internal class SocketHandlerService(
         _logger.LogInformation("Gree AC server started");
         _logger.LogInformation("Domainname for AC Devices: {DomainName}", _serverOptions.DomainName);
         _logger.LogInformation("IP Address for AC Devices: {ExternalIp}", _serverOptions.ExternalIp);
-        _logger.LogInformation("Port for AC Devices: {HTTP_PORT}", ServerOption.HTTP_PORT);
+        _logger.LogInformation("Port for AC Devices: {PORT}", ServerOption.PORT);
+        if (_serverOptions.TLSEnabled)
+        {
+            _logger.LogInformation("TLS Port for AC Devices: {TLS_PORT}", ServerOption.TLS_PORT);
+        }
     }
 
     public void Stop()
     {
         _isRunning = false;
         _cancellationTokenSource?.Cancel();
+        _logger.LogDebug("Gree AC server stopping...");
 
         foreach (var server in _servers)
         {
@@ -80,7 +106,8 @@ internal class SocketHandlerService(
                 {
                     continue;
                 }
-                _ = Task.Run(() => HandleClientAsync(newClient));
+                var isTls = server.LocalEndpoint is IPEndPoint { Port: ServerOption.TLS_PORT };
+                _ = Task.Run(() => HandleClientAsync(newClient, isTls));
             }
             catch (ObjectDisposedException)
             {
@@ -105,21 +132,34 @@ internal class SocketHandlerService(
         }
     }
 
-    private async Task HandleClientAsync(TcpClient client)
+    private async Task HandleClientAsync(TcpClient client, bool isTLS)
     {
         var clientIPAddress = (client.Client.RemoteEndPoint as IPEndPoint)?.Address.ToString();
+        _logger.LogDebug("Message received from {sourceIP} (Port: {port})", clientIPAddress, isTLS ? ServerOption.TLS_PORT : ServerOption.PORT);
 
         try
         {
-            using var sWriter = new StreamWriter(client.GetStream(), Encoding.ASCII);
-            using var sReader = new StreamReader(client.GetStream(), Encoding.ASCII);
-            client.ReceiveTimeout = 5 * 60000; // 5 minutes
+            Stream clientStream = client.GetStream();
+
+            if (isTLS)
+            {
+                var sslStream = new SslStream(client.GetStream(), false, ValidateCertificate);
+                await sslStream.AuthenticateAsServerAsync(_tlsCertificate!);
+                clientStream = sslStream;
+            }
+
+            using var sWriter = new StreamWriter(clientStream, Encoding.ASCII);
+            using var sReader = new StreamReader(clientStream, Encoding.ASCII);
+            client.ReceiveTimeout = ServerOption.ReceiveTimeout;
             bool isClientConnected = true;
 
             while (isClientConnected && _isRunning)
             {
                 var data = sReader.ReadLine();
-                if (data == null) break;
+                if (data == null)
+                {
+                    break;
+                }
 
                 var response = _greeHandler.GetResponse(data);
                 isClientConnected = response.KeepAlive;
@@ -139,8 +179,6 @@ internal class SocketHandlerService(
                     });
                 }
             }
-
-            _logger.LogDebug("Connection close.");
         }
         catch (IOException e)
         {
@@ -152,7 +190,18 @@ internal class SocketHandlerService(
         }
         finally
         {
+            _logger.LogDebug("Connection close.");
             client.Close();
         }
+    }
+
+    private bool ValidateCertificate(
+        object sender,
+        X509Certificate? certificate,
+        X509Chain? chain,
+        SslPolicyErrors sslPolicyErrors)
+    {
+        // Accept all certificate
+        return true;
     }
 }

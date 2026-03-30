@@ -1,16 +1,20 @@
 using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using GreeACLocalServer.Device.Interfaces;
 using GreeACLocalServer.Device.Models;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace GreeACLocalServer.Device.Services;
 
-internal class CryptoService(IOptionsMonitor<DeviceManagementOptions> _options) : ICryptoService
+internal class CryptoService(IOptionsMonitor<EncryptionOptions> options, ILogger<CryptoService> _logger) : ICryptoService
 {
-    private string _defaultCryptoKey => string.IsNullOrEmpty(_options.CurrentValue.DefaultCryptoKey)
+    private string _defaultCryptoKey => string.IsNullOrEmpty(options.CurrentValue.DefaultCryptoKey)
         ? throw new InvalidOperationException("GreeServer:DeviceManagementOptions:DefaultCryptoKey must be configured.")
-        : _options.CurrentValue.DefaultCryptoKey;
+        : options.CurrentValue.DefaultCryptoKey;
+
+    private EncryptionOptions _options => options.CurrentValue;
 
     /// <summary>
     /// Decrypt with a custom key (used for device communication)
@@ -51,7 +55,6 @@ internal class CryptoService(IOptionsMonitor<DeviceManagementOptions> _options) 
             key = _defaultCryptoKey;
         }
 
-
         using var myaes = Aes.Create();
         myaes.Mode = CipherMode.ECB;
         myaes.Key = Encoding.UTF8.GetBytes(key);
@@ -67,5 +70,57 @@ internal class CryptoService(IOptionsMonitor<DeviceManagementOptions> _options) 
         swEncrypt.Close();
         msEncrypt.Flush();
         return Convert.ToBase64String(msEncrypt.ToArray());
+    }
+
+    public X509Certificate2 GetCertificate(string? hostName = null)
+    {
+        if (!string.IsNullOrWhiteSpace(_options.TLSCertificatePath)
+            && File.Exists(_options.TLSCertificatePath))
+        {
+            var certExtension = Path.GetExtension(_options.TLSCertificatePath);
+
+            if (certExtension?.Equals("pfx", StringComparison.CurrentCultureIgnoreCase) ?? false)
+            {
+                return X509CertificateLoader.LoadPkcs12FromFile(_options.TLSCertificatePath, _options.TLSCertificatePassword);
+            }
+
+            return X509CertificateLoader.LoadCertificateFromFile(_options.TLSCertificatePath);
+        }
+
+        if (_options.TLSCertificateAutoCreate)
+        {
+            var certificate = GenerateSelfSignedCert(hostName ?? "localhost");
+            if (!string.IsNullOrWhiteSpace(_options.TLSCertificatePath))
+            {
+                var rawData = string.IsNullOrWhiteSpace(_options.TLSCertificatePassword)
+                    ? certificate.Export(X509ContentType.Pfx, _options.TLSCertificatePassword)
+                    : certificate.RawData;
+
+                File.WriteAllBytes(_options.TLSCertificatePath, rawData);
+            }
+
+            return certificate;
+        }
+
+        throw new ArgumentNullException(_options.TLSCertificatePath, "TLS cerrtificate not found");
+    }
+
+    private X509Certificate2 GenerateSelfSignedCert(string commonName, string organization = "Gree", string unit = "Unit")
+    {
+        using var rsa = RSA.Create(2048);
+
+        var request = new CertificateRequest(
+            $"CN={commonName}, O={organization}, OU={unit}, L=Locality, ST=State, C=XX",
+            rsa,
+            HashAlgorithmName.SHA256,
+            RSASignaturePadding.Pkcs1);
+
+        var cert = request.CreateSelfSigned(
+            DateTimeOffset.Now,
+            DateTimeOffset.Now.AddYears(10));
+
+        _logger.LogDebug("Generated self-signed certifiacet with common name: {commonName}", commonName);
+
+        return cert;
     }
 }

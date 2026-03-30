@@ -13,7 +13,7 @@ public static class DIExtensions
         // Set configuration
         var greeConfig = configuration.GetSection("GreeServer");
         services.Configure<ServerOptions>(greeConfig.GetSection("ServerOptions"));
-        services.Configure<DeviceManagementOptions>(greeConfig.GetSection("DeviceManagementOptions"));
+        services.Configure<EncryptionOptions>(greeConfig.GetSection("EncryptionOptions"));
 
         // Set services
         services.AddSingleton<ICryptoService, CryptoService>();
