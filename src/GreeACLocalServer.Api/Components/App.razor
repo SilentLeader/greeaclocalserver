@@ -10,21 +10,32 @@
     <link rel="stylesheet" href="@Assets["GreeACLocalServer.UI.styles.css"]" />
     <link href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap" rel="stylesheet" />
     <link href="@Assets["_content/MudBlazor/MudBlazor.min.css"]" rel="stylesheet" />
-    <ImportMap/>
+    <ImportMap />
     <link rel="icon" type="image/svg+xml" href="icons/favicon.svg" />
-    <link rel="icon" type="image/png" href="ficons/avicon.png" />
+    <link rel="icon" type="image/png" href="icons/favicon.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16x16.png" />
     <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
     <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png" />
     <link rel="manifest" href="manifest.json" />
     <meta name="theme-color" content="#1976D2" />
-    <HeadOutlet @rendermode="@(new InteractiveAutoRenderMode(prerender: false))"/>
+    <HeadOutlet @rendermode="@(new InteractiveAutoRenderMode(prerender: false))" />
 </head>
 
 <body>
-    <Routes @rendermode="@(new InteractiveAutoRenderMode(prerender: false))"/>
+    <div id="app-loader" class="loading-container">
+        <svg class="loading-progress">
+            <circle r="40%" cx="50%" cy="50%" />
+            <circle r="40%" cx="50%" cy="50%" />
+        </svg>
+        <div class="loading-progress-text"></div>
+    </div>
+
+    <Routes @rendermode="@(new InteractiveAutoRenderMode(prerender: false))" />
     <script src="@Assets["_content/MudBlazor/MudBlazor.min.js"]"></script>
-    <script src="_framework/blazor.web.js"></script>
+    <script src="scripts/blazor_extensions.js"></script>
+    <script src="_framework/blazor.web.js" autostart="false"></script>
+    <script src="scripts/blazor_loader.js"></script>
+    
 </body>
 
 </html>
