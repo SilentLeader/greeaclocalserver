@@ -125,6 +125,7 @@ namespace GreeACLocalServer.Api
 
             services.AddScoped<IDeviceConfigService, DeviceConfigService>();
             services.AddScoped<IConfigService, ConfigService>();
+            services.AddScoped<ILocalStorageService, LocalStorageService>();
 
             // Configuration options
             services.Configure<ServerOptions>(configuration.GetSection("Server"));
