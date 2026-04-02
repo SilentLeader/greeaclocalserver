@@ -1,15 +1,10 @@
 // Shared configuration for theme settings
-const DARK_THEME_STYLES = {
-    '--mud-palette-background': `rgba(50,51,61,1)`,
-    '--mud-palette-text-primary': `rgba(255,255,255,0.6980392156862745)`,
-    '--loader-base-color': `rgb(99, 99, 110)`
-};
 
 // Apply dark theme styles to root element
 function applyDarkTheme() {
-    Object.entries(DARK_THEME_STYLES).forEach(([property, value]) => {
-        rootElement.style.setProperty(property, value);
-    });
+    rootElement.style.setProperty('--loader-base-color', 'rgb(99, 99, 110)');
+    window.document.body.style.backgroundColor = 'rgba(50,51,61,1)';
+    window.document.body.style.color = 'rgba(255,255,255,0.6980392156862745)';
 }
 
 // Determine if dark mode should be applied
@@ -52,6 +47,8 @@ function completeInitialization(blazor) {
     if (appLoader) {
         appLoader.remove();
     }
+
+    document.body.removeAttribute('style');
 }
 
 // Merged lifecycle hooks - no duplication
