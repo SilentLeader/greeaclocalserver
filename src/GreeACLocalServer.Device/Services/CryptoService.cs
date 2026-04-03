@@ -29,17 +29,25 @@ internal class CryptoService(IOptionsMonitor<EncryptionOptions> options, ILogger
             key = _defaultCryptoKey;
         }
 
-        using var myaes = Aes.Create();
-        myaes.Mode = CipherMode.ECB;
-        myaes.Key = Encoding.UTF8.GetBytes(key);
-        myaes.Padding = PaddingMode.PKCS7;
-        myaes.GenerateIV();
+        try
+        {
+            using var myaes = Aes.Create();
+            myaes.Mode = CipherMode.ECB;
+            myaes.Key = Encoding.UTF8.GetBytes(key);
+            myaes.Padding = PaddingMode.PKCS7;
+            myaes.GenerateIV();
 
-        using var decryptor = myaes.CreateDecryptor(myaes.Key, myaes.IV);
-        using var msDecrypt = new MemoryStream(Convert.FromBase64String(pack));
-        using var csDecrypt = new CryptoStream(msDecrypt, decryptor, CryptoStreamMode.Read);
-        using var srDecrypt = new StreamReader(csDecrypt);
-        return srDecrypt.ReadToEnd();
+            using var decryptor = myaes.CreateDecryptor(myaes.Key, myaes.IV);
+            using var msDecrypt = new MemoryStream(Convert.FromBase64String(pack));
+            using var csDecrypt = new CryptoStream(msDecrypt, decryptor, CryptoStreamMode.Read);
+            using var srDecrypt = new StreamReader(csDecrypt);
+            return srDecrypt.ReadToEnd();
+        }
+        catch
+        {
+            _logger.LogError("Decryption error. Source data: {pack}", pack);
+            throw;
+        }
     }
 
     /// <summary>

@@ -26,19 +26,20 @@ internal class MessageHandlerService(ICryptoService cryptoService, IOptions<Serv
     {
         if (string.IsNullOrWhiteSpace(input))
         {
-            _logger.LogWarning("Empty message");
+            _logger.LogWarning("Empty message received");
             return HandleUnknownCommand(true);
         }
 
         DefaultRequest? request;
         try
         {
+            _logger.LogDebug("Process device request: {input}", input);
             request = JsonSerializer.Deserialize<DefaultRequest>(input);
         }
         catch (JsonException e)
         {
-            var inputBytes = System.Text.Encoding.ASCII.GetBytes(input);
-            _logger.LogWarning(e, "Invalid message format. Input bytes: {InputBytes}", inputBytes);
+            var inputPreview = input.Length > 50 ? input[..50] + "..." : input;
+            _logger.LogWarning(e, "Invalid message format: {InputLength} bytes", input.Length);
             return HandleUnknownCommand();
         }
 
@@ -48,7 +49,7 @@ internal class MessageHandlerService(ICryptoService cryptoService, IOptions<Serv
             return HandleUnknownCommand();
         }
 
-        _logger.LogDebug("Request: {Input}", input.Replace("\n", string.Empty));
+        _logger.LogDebug("Processing request type {RequestType}", request.Type);
         var response = request.Type switch
         {
             CommandType.Discover => HandleDiscover(request),
@@ -58,16 +59,17 @@ internal class MessageHandlerService(ICryptoService cryptoService, IOptions<Serv
             _ => HandleUnknownCommand(),
         };
 
-        _logger.LogDebug("Response: {Response}", response.Data);
+        _logger.LogDebug("Response generated for request type {RequestType}", request.Type);
         response.Data = response.Data.Trim() + "\n";
         response.MacAddress = !string.IsNullOrWhiteSpace(request.MacAddress) ? request.MacAddress : request.CID;
+        _logger.LogDebug("Response data {data}", response.Data);
 
         return response;
     }
 
     private GreeHandlerResponse HandleDiscover(DefaultRequest req)
     {
-        _logger.LogDebug("Request: Discover");
+        _logger.LogDebug("Handling Discover request");
 
         ArgumentException.ThrowIfNullOrWhiteSpace(_deviceHandlerOptions.DomainName);
         ArgumentException.ThrowIfNullOrWhiteSpace(_deviceHandlerOptions.ExternalIp);
@@ -128,7 +130,7 @@ internal class MessageHandlerService(ICryptoService cryptoService, IOptions<Serv
                 return loginResponse;
 
             default:
-                _logger.LogWarning("Request Pack unknown: {Type}", pack.Type);
+                _logger.LogWarning("Unknown pack type: {Type}", pack.Type);
                 return new GreeHandlerResponse
                 {
                     Data = string.Empty,
@@ -140,7 +142,7 @@ internal class MessageHandlerService(ICryptoService cryptoService, IOptions<Serv
 
     private GreeHandlerResponse HandleDevLogin(Pack pack)
     {
-        _logger.LogInformation("Request: devLogin");
+        _logger.LogInformation("Handling devLogin for device");
 
         var normalizedMac = NormalizeMac(pack.MacAddress);
 
