@@ -11,6 +11,7 @@ builder.Services.AddScoped<IDeviceManagerService, HttpDeviceManagerService>();
 builder.Services.AddScoped<IDeviceConfigService, HttpDeviceConfigService>();
 builder.Services.AddScoped<IConfigService, HttpConfigService>();
 builder.Services.AddScoped<ILocalStorageService, LocalStorageService>();
+builder.Services.AddScoped<IThemeService, ThemeService>();
 
 // Register browser detection service
 builder.Services.AddScoped<IBrowserDetectionService, ClientBrowserDetectionService>();

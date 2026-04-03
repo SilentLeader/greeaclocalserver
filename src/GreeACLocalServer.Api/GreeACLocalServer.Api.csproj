@@ -25,7 +25,6 @@
     <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Systemd" Version="10.0.5" />
     <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.5" />
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.5" />
     <PackageReference Include="MudBlazor" Version="9.2.0" />
     <PackageReference Include="Roslynator.Analyzers" Version="4.15.0">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
