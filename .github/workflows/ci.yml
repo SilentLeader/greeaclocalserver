@@ -1,0 +1,57 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # GitVersion needs full git history
+
+      - name: Install GitVersion
+        uses: gittools/actions/gitversion/setup@v4.4.2
+        with:
+          versionSpec: "5.x"
+
+      - name: Determine Version
+        id: gitversion
+        uses: gittools/actions/gitversion/execute@v4.4.2
+
+      - name: Set Version Output
+        id: version
+        run: |
+          echo "version=v${{ steps.gitversion.outputs.semVer }}" >> $GITHUB_OUTPUT
+          echo "semver=${{ steps.gitversion.outputs.semVer }}" >> $GITHUB_OUTPUT
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore dependencies
+        run: dotnet restore src/GreeACLocalServer.sln
+
+      - name: Build solution
+        run: |
+          dotnet build src/GreeACLocalServer.sln \
+            --configuration Release \
+            --no-restore \
+            -p:Version=${{ steps.gitversion.outputs.semVer }} \
+            -p:AssemblyVersion=${{ steps.gitversion.outputs.majorMinorPatch }} \
+            -p:FileVersion=${{ steps.gitversion.outputs.assemblyInformationalVersion }} \
+            -p:InformationalVersion=${{ steps.gitversion.outputs.informationalVersion }}
+
+      - name: Run tests
+        run: dotnet test src/GreeACLocalServer.sln --configuration Release --no-build --verbosity normal
