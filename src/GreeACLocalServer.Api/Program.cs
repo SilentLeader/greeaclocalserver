@@ -6,7 +6,6 @@ using GreeACLocalServer.Device.Extensions;
 using Microsoft.AspNetCore.Mvc;
 using MudBlazor.Services;
 using Serilog;
-using GreeACLocalServer.Device.Services;
 
 namespace GreeACLocalServer.Api
 {
@@ -166,7 +165,6 @@ namespace GreeACLocalServer.Api
             // Web-specific services
             services.AddSignalR();
             services.AddEndpointsApiExplorer();
-            services.AddSwaggerGen();
             services.AddResponseCompression();
             services.AddMudServices();
 
@@ -258,8 +256,6 @@ namespace GreeACLocalServer.Api
 
             if (app.Environment.IsDevelopment())
             {
-                app.UseSwagger();
-                app.UseSwaggerUI();
                 app.UseWebAssemblyDebugging();
             }
             else
