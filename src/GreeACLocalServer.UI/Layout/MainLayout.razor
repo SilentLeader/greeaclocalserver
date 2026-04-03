@@ -1,8 +1,7 @@
 ﻿@inherits LayoutComponentBase
-@inject ILocalStorageService _localStorageService
-@inject ILogger<MainLayout> _logger
+@inject IThemeService _themeService
 
-<MudThemeProvider @ref="_mudThemeProvider" IsDarkMode="_isDarkMode" />
+<MudThemeProvider @ref="_mudThemeProvider" IsDarkMode="_themeService.IsDarkMode" />
 <MudPopoverProvider />
 <MudDialogProvider />
 <MudSnackbarProvider />
@@ -16,9 +15,9 @@
         <MudText Typo="Typo.h6">GREE AC Local Server</MudText>
         <MudSpacer />
         <MudIconButton
-        Icon="@(_isAutoMode ? Icons.Material.Filled.AutoMode : (_isDarkMode ? Icons.Material.Filled.DarkMode : Icons.Material.Filled.LightMode))"
+        Icon="@(_themeService.IsAutoMode ? Icons.Material.Filled.AutoMode : (_themeService.IsDarkMode ? Icons.Material.Filled.DarkMode : Icons.Material.Filled.LightMode))"
         Color="Color.Inherit" OnClick="@((e) => ToggleTheme())"
-        title="@($"Toggle theme ({(_isAutoMode ? "Auto mode" : (_isDarkMode ? "Dark mode" : "Light mode"))})")" />
+        title="@($"Toggle theme ({(_themeService.IsAutoMode ? "Auto mode" : (_themeService.IsDarkMode ? "Dark mode" : "Light mode"))})")" />
     </MudAppBar>
     <MudDrawer @bind-Open="@_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="2">
         <NavMenu />
@@ -32,43 +31,14 @@
 
 @code {
     private bool _drawerOpen = true;
-    private bool _isDarkMode;
-    private bool _isAutoMode = true;
+    
     private MudThemeProvider _mudThemeProvider = null!;
-
-    private const string DarkModeSettingsName = "IsDarkTheme";
-
+    
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender && _mudThemeProvider != null)
         {
-            try
-            {
-                var isSavedDarkTheme = await _localStorageService.Get<bool?>(DarkModeSettingsName);
-                
-                if (isSavedDarkTheme != null)
-                {
-                    _isAutoMode = false;
-                    _isDarkMode = isSavedDarkTheme.Value;
-                }
-                else
-                {
-                    // Get system preference
-                    _isDarkMode = await _mudThemeProvider.GetSystemDarkModeAsync();
-                
-                    // Watch for system changes
-                    await _mudThemeProvider.WatchSystemDarkModeAsync(OnSystemThemeChanged);
-                }
-                
-                StateHasChanged();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Dark mode detection failed");
-                // Fallback to light mode if detection fails
-                _isDarkMode = false;
-                StateHasChanged();
-            }
+            await _themeService.Init(_mudThemeProvider, StateHasChanged);
         }
     }
 
@@ -79,35 +49,6 @@
 
     private async Task ToggleTheme()
     {
-        var isCurrentModeDark = await _mudThemeProvider.GetSystemDarkModeAsync();
-        
-        if (_isAutoMode)
-        {
-            _isAutoMode = false;
-            _isDarkMode = !isCurrentModeDark;
-            await _localStorageService.Set<bool>(DarkModeSettingsName, _isDarkMode);
-        }
-        else
-        {
-            if (_isDarkMode == isCurrentModeDark)
-            {
-                _isAutoMode = true;
-                await _localStorageService.Remove(DarkModeSettingsName);
-            }
-            else
-            {
-                _isDarkMode = !_isDarkMode;
-                await _localStorageService.Set<bool>(DarkModeSettingsName, _isDarkMode);
-            }
-        }
-    }
-
-    private async Task OnSystemThemeChanged(bool isDark)
-    {
-        if (_isAutoMode)
-        {
-            _isDarkMode = isDark;
-            await InvokeAsync(StateHasChanged);
-        }
+        await _themeService.ToggleTheme();
     }
 }

@@ -47,8 +47,6 @@ function completeInitialization(blazor) {
     if (appLoader) {
         appLoader.remove();
     }
-
-    document.body.removeAttribute('style');
 }
 
 // Merged lifecycle hooks - no duplication

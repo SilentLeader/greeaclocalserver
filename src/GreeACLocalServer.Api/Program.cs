@@ -125,7 +125,6 @@ namespace GreeACLocalServer.Api
 
             services.AddScoped<IDeviceConfigService, DeviceConfigService>();
             services.AddScoped<IConfigService, ConfigService>();
-            services.AddScoped<ILocalStorageService, LocalStorageService>();
 
             // Configuration options
             services.Configure<ServerOptions>(configuration.GetSection("Server"));
@@ -149,6 +148,8 @@ namespace GreeACLocalServer.Api
             // UI-enabled DeviceManagerService with SignalR support
             services.AddSingleton<IInternalDeviceManagerService, DeviceManagerService>();
             services.AddSingleton<IDeviceManagerService>(x => x.GetRequiredService<IInternalDeviceManagerService>());
+            services.AddScoped<ILocalStorageService, LocalStorageService>();
+            services.AddScoped<IThemeService, ThemeService>();
         }
 
         private static void ConfigureCommonServicesHeadless(IServiceCollection services, IConfiguration configuration)
