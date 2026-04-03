@@ -29,26 +29,3 @@
     </MudMainContent>
 </MudLayout>
 
-@code {
-    private bool _drawerOpen = true;
-    
-    private MudThemeProvider _mudThemeProvider = null!;
-    
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (firstRender && _mudThemeProvider != null)
-        {
-            await _themeService.Init(_mudThemeProvider, StateHasChanged);
-        }
-    }
-
-    private void ToggleDrawer()
-    {
-        _drawerOpen = !_drawerOpen;
-    }
-
-    private async Task ToggleTheme()
-    {
-        await _themeService.ToggleTheme();
-    }
-}

@@ -1,8 +1,4 @@
 @page "/wifi-config"
-@inject ISnackbar Snackbar
-@inject IJSRuntime JSRuntime
-@inject IBrowserDetectionService BrowserDetection
-@using GreeACLocalServer.UI.Services
 
 <PageTitle>WiFi Configuration</PageTitle>
 
@@ -134,17 +130,6 @@
     </MudCardContent>
 </MudCard>
 
-@code {
-    private string _wifiSsid = string.Empty;
-    private string _wifiPassword = string.Empty;
-    private string _selectedOs = "linux";
-    private bool _showPassword = false;
-    private string _osDetectionMessage = string.Empty;
-
-    protected override async Task OnInitializedAsync()
-    {
-        await DetectOperatingSystem();
-    }
 
     private async Task DetectOperatingSystem()
     {
