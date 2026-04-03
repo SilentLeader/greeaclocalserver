@@ -9,6 +9,7 @@ using Microsoft.Extensions.Options;
 using GreeACLocalServer.Device.Models;
 using System.Security.Cryptography.X509Certificates;
 using System.Net.Security;
+using Serilog.Context;
 
 namespace GreeACLocalServer.Device.Services;
 
@@ -135,63 +136,68 @@ internal class SocketHandlerService(
     private async Task HandleClientAsync(TcpClient client, bool isTLS)
     {
         var clientIPAddress = (client.Client.RemoteEndPoint as IPEndPoint)?.Address.ToString();
-        _logger.LogDebug("Message received from {sourceIP} (Port: {port})", clientIPAddress, isTLS ? ServerOption.TLS_PORT : ServerOption.PORT);
-
-        try
+        
+        using (LogContext.PushProperty("ConnectionId", Guid.NewGuid().ToString("N")[..8]))
         {
-            Stream clientStream = client.GetStream();
+            _logger.LogDebug("Client connected from {IpAddress}", clientIPAddress);
 
-            if (isTLS)
+            try
             {
-                var sslStream = new SslStream(client.GetStream(), false, ValidateCertificate);
-                await sslStream.AuthenticateAsServerAsync(_tlsCertificate!);
-                clientStream = sslStream;
-            }
+                Stream clientStream = client.GetStream();
 
-            using var sWriter = new StreamWriter(clientStream, Encoding.ASCII);
-            using var sReader = new StreamReader(clientStream, Encoding.ASCII);
-            client.ReceiveTimeout = ServerOption.ReceiveTimeout;
-            bool isClientConnected = true;
-
-            while (isClientConnected && _isRunning)
-            {
-                var data = sReader.ReadLine();
-                if (data == null)
+                if (isTLS)
                 {
-                    break;
+                    var sslStream = new SslStream(client.GetStream(), false, ValidateCertificate);
+                    await sslStream.AuthenticateAsServerAsync(_tlsCertificate!);
+                    _logger.LogDebug("TLS handshake completed successfully");
+                    clientStream = sslStream;
                 }
 
-                var response = _greeHandler.GetResponse(data);
-                isClientConnected = response.KeepAlive;
+                using var sWriter = new StreamWriter(clientStream, Encoding.ASCII);
+                using var sReader = new StreamReader(clientStream, Encoding.ASCII);
+                client.ReceiveTimeout = ServerOption.ReceiveTimeout;
+                bool isClientConnected = true;
 
-                if (!string.IsNullOrEmpty(response.Data))
+                while (isClientConnected && _isRunning)
                 {
-                    sWriter.WriteLine(response.Data);
-                    sWriter.Flush();
-                }
-
-                if (!string.IsNullOrEmpty(response.MacAddress))
-                {
-                    _deviceEventPublisher.DeviceConnected(new DeviceConnectedMessage
+                    var data = sReader.ReadLine();
+                    if (data == null)
                     {
-                        MacAddress = response.MacAddress,
-                        IPAddress = clientIPAddress
-                    });
+                        break;
+                    }
+
+                    var response = _greeHandler.GetResponse(data);
+                    isClientConnected = response.KeepAlive;
+
+                    if (!string.IsNullOrEmpty(response.Data))
+                    {
+                        sWriter.WriteLine(response.Data);
+                        sWriter.Flush();
+                    }
+
+                    if (!string.IsNullOrEmpty(response.MacAddress))
+                    {
+                        _deviceEventPublisher.DeviceConnected(new DeviceConnectedMessage
+                        {
+                            MacAddress = response.MacAddress,
+                            IPAddress = clientIPAddress
+                        });
+                    }
                 }
             }
-        }
-        catch (IOException e)
-        {
-            _logger.LogWarning(e, "Client connection closed or timed out");
-        }
-        catch (Exception e)
-        {
-            _logger.LogError(e, "Unhandled error");
-        }
-        finally
-        {
-            _logger.LogDebug("Connection close.");
-            client.Close();
+            catch (IOException e)
+            {
+                _logger.LogWarning(e, "Client connection closed or timed out");
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Unhandled error in client handler");
+            }
+            finally
+            {
+                _logger.LogDebug("Connection closed");
+                client.Close();
+            }
         }
     }
 
