@@ -5,17 +5,21 @@ using GreeACLocalServer.Shared.Interfaces;
 
 namespace GreeACLocalServer.UI.Pages;
 
-public partial class WifiConfig : ComponentBase
+public partial class WifiConfig(
+    ISnackbar _snackbar,
+    IJSRuntime _jsRuntime,
+    IBrowserDetectionService _browserDetectionService) : ComponentBase
 {
-    [Inject] private ISnackbar Snackbar { get; set; } = default!;
-    [Inject] private IJSRuntime JSRuntime { get; set; } = default!;
-    [Inject] private IBrowserDetectionService BrowserDetection { get; set; } = default!;
-
     private string _wifiSsid = string.Empty;
     private string _wifiPassword = string.Empty;
     private string _selectedOs = "linux";
     private bool _showPassword = false;
     private string _osDetectionMessage = string.Empty;
+
+    private bool IsFormValid =>
+        !string.IsNullOrWhiteSpace(_wifiSsid) &&
+        !string.IsNullOrWhiteSpace(_wifiPassword);
+
 
     protected override async Task OnInitializedAsync()
     {
@@ -26,7 +30,7 @@ public partial class WifiConfig : ComponentBase
     {
         try
         {
-            var detectedOs = await BrowserDetection.DetectOperatingSystemAsync();
+            var detectedOs = await _browserDetectionService.DetectOperatingSystemAsync();
             _selectedOs = detectedOs;
 
             // Set appropriate message based on detected OS
@@ -44,10 +48,6 @@ public partial class WifiConfig : ComponentBase
             _osDetectionMessage = "OS detection unavailable - defaulted to Linux";
         }
     }
-
-    private bool IsFormValid =>
-        !string.IsNullOrWhiteSpace(_wifiSsid) &&
-        !string.IsNullOrWhiteSpace(_wifiPassword);
 
     private void TogglePasswordVisibility()
     {
@@ -98,12 +98,12 @@ public partial class WifiConfig : ComponentBase
         try
         {
             var command = GetGeneratedCommand();
-            await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", command);
-            Snackbar.Add("Command copied to clipboard!", Severity.Success);
+            await _jsRuntime.InvokeVoidAsync("navigator.clipboard.writeText", command);
+            _snackbar.Add("Command copied to clipboard!", Severity.Success);
         }
         catch (Exception)
         {
-            Snackbar.Add("Failed to copy to clipboard. Please copy manually.", Severity.Error);
+            _snackbar.Add("Failed to copy to clipboard. Please copy manually.", Severity.Error);
         }
     }
 
@@ -113,6 +113,6 @@ public partial class WifiConfig : ComponentBase
         _wifiPassword = string.Empty;
         // Don't reset OS selection to preserve auto-detection
         _showPassword = false;
-        Snackbar.Add("Form cleared", Severity.Info);
+        _snackbar.Add("Form cleared", Severity.Info);
     }
 }

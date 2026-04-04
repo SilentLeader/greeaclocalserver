@@ -10,19 +10,19 @@ internal static class DeviceConfigModule
     public static IEndpointRouteBuilder ConfigureDeviceConfigModule(this IEndpointRouteBuilder api)
     {
         var deviceConfig = api.MapGroup("/device-config");
-        deviceConfig.MapPost("/status", async ([FromBody] QueryDeviceStatusRequest request, IDeviceConfigService configService) =>
+        deviceConfig.MapPost("/status", async ([FromBody] QueryDeviceStatusRequest request, IDeviceConfigService configService, CancellationToken cancellationToken) =>
         {
-            var result = await configService.QueryDeviceStatusAsync(request);
+            var result = await configService.QueryDeviceStatusAsync(request, cancellationToken);
             return Results.Ok(result);
         });
-        deviceConfig.MapPost("/set-name", async ([FromBody] UpdateDeviceNameRequest request, IDeviceConfigService configService) =>
+        deviceConfig.MapPost("/set-name", async ([FromBody] UpdateDeviceNameRequest request, IDeviceConfigService configService, CancellationToken cancellationToken) =>
         {
-            var result = await configService.SetDeviceNameAsync(request);
+            var result = await configService.SetDeviceNameAsync(request, cancellationToken);
             return Results.Ok(result);
         });
-        deviceConfig.MapPost("/set-remote-host", async ([FromBody] UpdateRemoteHostRequest request, IDeviceConfigService configService) =>
+        deviceConfig.MapPost("/set-remote-host", async ([FromBody] UpdateRemoteHostRequest request, IDeviceConfigService configService, CancellationToken cancellationToken) =>
         {
-            var result = await configService.SetRemoteHostAsync(request);
+            var result = await configService.SetRemoteHostAsync(request, cancellationToken);
             return Results.Ok(result);
         });
 

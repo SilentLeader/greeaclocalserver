@@ -104,7 +104,7 @@
                         <MudTextField @bind-Value="@_setNameRequest.DeviceName" Label="New Device Name"
                                       Placeholder="Living Room AC" For="@(() => _setNameRequest.DeviceName)" Class="mb-4" />
 
-                        <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Secondary"
+                        <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary"
                                    StartIcon="@Icons.Material.Filled.Edit" Disabled="@_setNameInProgress" FullWidth="true">
                             @if (_setNameInProgress)
                             {
@@ -161,7 +161,7 @@
                             <MudTextField @bind-Value="@_setHostRequest.RemoteHost" Label="New Remote Host"
                                           Placeholder="gree.local.home" For="@(() => _setHostRequest.RemoteHost)" Class="mb-4" />
 
-                            <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Tertiary"
+                            <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary"
                                        StartIcon="@Icons.Material.Filled.Router" Disabled="@_setHostInProgress" FullWidth="true">
                                 @if (_setHostInProgress)
                                 {
