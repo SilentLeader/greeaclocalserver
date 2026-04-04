@@ -6,13 +6,12 @@ using GreeACLocalServer.Shared.Contracts;
 
 namespace GreeACLocalServer.UI.Pages;
 
-public partial class DeviceConfig : ComponentBase, IDisposable
+public partial class DeviceConfig(
+    IDeviceConfigService _deviceConfigService,
+    IDeviceManagerService _deviceManagerService,
+    IConfigService _configService,
+    ISnackbar _snackbar) : ComponentBase, IDisposable
 {
-    [Inject] private IDeviceConfigService DeviceConfigService { get; set; } = default!;
-    [Inject] private IDeviceManagerService DeviceManagerService { get; set; } = default!;
-    [Inject] private IConfigService ConfigService { get; set; } = default!;
-    [Inject] private ISnackbar Snackbar { get; set; } = default!;
-
     private readonly QueryDeviceStatusRequest _statusRequest = new();
     private readonly UpdateDeviceNameRequest _setNameRequest = new();
     private readonly UpdateRemoteHostRequest _setHostRequest = new();
@@ -46,11 +45,11 @@ public partial class DeviceConfig : ComponentBase, IDisposable
             _loadingConfig = true;
             StateHasChanged();
 
-            _serverConfig = await ConfigService.GetServerConfigAsync(_cancellationTokenSource.Token);
+            _serverConfig = await _configService.GetServerConfigAsync(_cancellationTokenSource.Token);
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Failed to load server configuration: {ex.Message}", Severity.Warning);
+            _snackbar.Add($"Failed to load server configuration: {ex.Message}", Severity.Warning);
             // Set default config if loading fails
             _serverConfig = new ServerConfigResponse
             {
@@ -72,11 +71,11 @@ public partial class DeviceConfig : ComponentBase, IDisposable
             _loadingDevices = true;
             StateHasChanged();
 
-            _availableDevices = (await DeviceManagerService.GetAllDeviceStatesAsync()).ToList();
+            _availableDevices = (await _deviceManagerService.GetAllDeviceStatesAsync(_cancellationTokenSource.Token)).ToList();
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Failed to load available devices: {ex.Message}", Severity.Warning);
+            _snackbar.Add($"Failed to load available devices: {ex.Message}", Severity.Warning);
         }
         finally
         {
@@ -87,12 +86,6 @@ public partial class DeviceConfig : ComponentBase, IDisposable
 
     private async Task<IEnumerable<string>> SearchDeviceIpAddresses(string value, CancellationToken cancellationToken)
     {
-        // Refresh devices list if empty or if needed
-        if (!_availableDevices.Any() && !_loadingDevices)
-        {
-            await LoadAvailableDevicesAsync();
-        }
-
         // If no search value, return all IP addresses
         if (string.IsNullOrWhiteSpace(value))
         {
@@ -122,15 +115,20 @@ public partial class DeviceConfig : ComponentBase, IDisposable
 
         try
         {
-            _statusResponse = await DeviceConfigService.QueryDeviceStatusAsync(_statusRequest, _cancellationTokenSource.Token);
+            _statusResponse = await _deviceConfigService.QueryDeviceStatusAsync(_statusRequest, _cancellationTokenSource.Token);
+
+            if (_cancellationTokenSource.IsCancellationRequested)
+            {
+                return;
+            }
 
             if (_statusResponse.Success)
             {
-                Snackbar.Add("Device status retrieved successfully!", Severity.Success);
+                _snackbar.Add("Device status retrieved successfully!", Severity.Success);
             }
             else
             {
-                Snackbar.Add($"Failed to query device status: {_statusResponse.Message}", Severity.Error);
+                _snackbar.Add($"Failed to query device status: {_statusResponse.Message}", Severity.Error);
             }
         }
         catch (Exception ex)
@@ -141,7 +139,7 @@ public partial class DeviceConfig : ComponentBase, IDisposable
                 Message = ex.Message,
                 ErrorCode = "EXCEPTION"
             };
-            Snackbar.Add($"Error querying device: {ex.Message}", Severity.Error);
+            _snackbar.Add($"Error querying device: {ex.Message}", Severity.Error);
         }
         finally
         {
@@ -160,18 +158,18 @@ public partial class DeviceConfig : ComponentBase, IDisposable
 
         try
         {
-            _setNameResponse = await DeviceConfigService.SetDeviceNameAsync(_setNameRequest, _cancellationTokenSource.Token);
+            _setNameResponse = await _deviceConfigService.SetDeviceNameAsync(_setNameRequest, _cancellationTokenSource.Token);
 
             if (_setNameResponse.Success)
             {
-                Snackbar.Add("Device name set successfully!", Severity.Success);
+                _snackbar.Add("Device name set successfully!", Severity.Success);
                 // Clear the form
                 _setNameRequest.IpAddress = string.Empty;
                 _setNameRequest.DeviceName = string.Empty;
             }
             else
             {
-                Snackbar.Add($"Failed to set device name: {_setNameResponse.Message}", Severity.Error);
+                _snackbar.Add($"Failed to set device name: {_setNameResponse.Message}", Severity.Error);
             }
         }
         catch (Exception ex)
@@ -182,7 +180,7 @@ public partial class DeviceConfig : ComponentBase, IDisposable
                 Message = ex.Message,
                 ErrorCode = "EXCEPTION"
             };
-            Snackbar.Add($"Error setting device name: {ex.Message}", Severity.Error);
+            _snackbar.Add($"Error setting device name: {ex.Message}", Severity.Error);
         }
         finally
         {
@@ -193,7 +191,10 @@ public partial class DeviceConfig : ComponentBase, IDisposable
 
     private async Task SetRemoteHost()
     {
-        if (_setHostInProgress) return;
+        if (_setHostInProgress)
+        {
+            return;
+        }
 
         _setHostInProgress = true;
         _setHostResponse = null;
@@ -201,18 +202,18 @@ public partial class DeviceConfig : ComponentBase, IDisposable
 
         try
         {
-            _setHostResponse = await DeviceConfigService.SetRemoteHostAsync(_setHostRequest, _cancellationTokenSource.Token);
+            _setHostResponse = await _deviceConfigService.SetRemoteHostAsync(_setHostRequest, _cancellationTokenSource.Token);
 
             if (_setHostResponse.Success)
             {
-                Snackbar.Add("Remote host set successfully! Remember to power cycle the device.", Severity.Success);
+                _snackbar.Add("Remote host set successfully! Remember to power cycle the device.", Severity.Success);
                 // Clear the form
                 _setHostRequest.IpAddress = string.Empty;
                 _setHostRequest.RemoteHost = string.Empty;
             }
             else
             {
-                Snackbar.Add($"Failed to set remote host: {_setHostResponse.Message}", Severity.Error);
+                _snackbar.Add($"Failed to set remote host: {_setHostResponse.Message}", Severity.Error);
             }
         }
         catch (Exception ex)
@@ -223,7 +224,7 @@ public partial class DeviceConfig : ComponentBase, IDisposable
                 Message = ex.Message,
                 ErrorCode = "EXCEPTION"
             };
-            Snackbar.Add($"Error setting remote host: {ex.Message}", Severity.Error);
+            _snackbar.Add($"Error setting remote host: {ex.Message}", Severity.Error);
         }
         finally
         {

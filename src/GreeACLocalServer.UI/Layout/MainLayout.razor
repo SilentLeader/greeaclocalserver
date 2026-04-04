@@ -1,7 +1,7 @@
 ﻿@inherits LayoutComponentBase
 @inject IThemeService _themeService
 
-<MudThemeProvider @ref="_mudThemeProvider" IsDarkMode="_themeService.IsDarkMode" />
+<MudThemeProvider @ref="_mudThemeProvider" IsDarkMode="_themeService.IsDarkMode" Theme="_themeService.Theme" />
 <MudPopoverProvider />
 <MudDialogProvider />
 <MudSnackbarProvider />

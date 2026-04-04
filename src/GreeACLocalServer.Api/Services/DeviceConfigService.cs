@@ -3,18 +3,11 @@ using GreeACLocalServer.Device.Requests;
 
 namespace GreeACLocalServer.Api.Services;
 
-public class DeviceConfigService : IDeviceConfigService
+public class DeviceConfigService(ILogger<DeviceConfigService> logger, IDeviceControllerService deviceManagementService, IOptionsMonitor<ServerOptions> serverOptions) : IDeviceConfigService
 {
-    private readonly ILogger<DeviceConfigService> _logger;
-    private readonly IDeviceControllerService _deviceManagementService;
-    private readonly IOptionsMonitor<ServerOptions> _serverOptions;
-
-    public DeviceConfigService(ILogger<DeviceConfigService> logger, IDeviceControllerService deviceManagementService, IOptionsMonitor<ServerOptions> serverOptions)
-    {
-        _logger = logger;
-        _deviceManagementService = deviceManagementService;
-        _serverOptions = serverOptions;
-    }
+    private readonly ILogger<DeviceConfigService> _logger = logger;
+    private readonly IDeviceControllerService _deviceManagementService = deviceManagementService;
+    private readonly IOptionsMonitor<ServerOptions> _serverOptions = serverOptions;
 
     public async Task<DeviceStatusResponse> QueryDeviceStatusAsync(QueryDeviceStatusRequest request, CancellationToken cancellationToken = default)
     {

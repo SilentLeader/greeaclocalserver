@@ -4,7 +4,10 @@ using MudBlazor;
 
 namespace GreeACLocalServer.UI.Services;
 
-public class ThemeService(IJSRuntime _jsRuntime, ILocalStorageService _localStorageService, ILogger<ThemeService> _logger) : IThemeService
+public class ThemeService(
+    IJSRuntime _jsRuntime,
+    ILocalStorageService _localStorageService,
+    ILogger<ThemeService> _logger) : IThemeService
 {
     private bool _isInitialized = false;
     private IJSObjectReference _module = null!;
@@ -20,7 +23,19 @@ public class ThemeService(IJSRuntime _jsRuntime, ILocalStorageService _localStor
     public bool IsDarkMode => _isDarkMode;
     public bool IsAutoMode => _isAutoMode;
 
-    public async Task Init(object mudThemeProvider, Action themeChangedCallback)
+    public MudTheme Theme { get; } = new()
+    {
+        PaletteLight = new PaletteLight()
+        {
+            Primary = Colors.Blue.Default,
+        },
+        PaletteDark = new PaletteDark()
+        {
+            Primary = Colors.Blue.Darken3
+        }
+    };
+
+    public async Task Init(MudThemeProvider mudThemeProvider, Action themeChangedCallback)
     {
         if (_isInitialized)
         {
@@ -30,7 +45,7 @@ public class ThemeService(IJSRuntime _jsRuntime, ILocalStorageService _localStor
         _module = await _jsRuntime.InvokeAsync<IJSObjectReference>("import", "./scripts/themeservice.module.js");
         _isInitialized = true;
 
-        _mudThemeProvider = (MudThemeProvider)mudThemeProvider;
+        _mudThemeProvider = mudThemeProvider;
         _themeChangedCallback = themeChangedCallback;
         await InitTheme();
         await _module.InvokeVoidAsync("themeService.removeLoadingStyle");

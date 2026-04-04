@@ -1,3 +1,5 @@
+using MudBlazor;
+
 namespace GreeACLocalServer.Shared.Interfaces;
 
 public interface IThemeService
@@ -5,6 +7,8 @@ public interface IThemeService
     bool IsDarkMode { get; }
     bool IsAutoMode { get; }
 
-    Task Init(object mudThemeProvider, Action themeChangedCallback);
+    MudTheme Theme { get; }
+
+    Task Init(MudThemeProvider mudThemeProvider, Action themeChangedCallback);
     Task ToggleTheme();
 }

@@ -9,17 +9,20 @@ using GreeACLocalServer.UI.Helpers;
 
 namespace GreeACLocalServer.UI.Pages;
 
-public partial class Home : ComponentBase, IAsyncDisposable
+public partial class Home(
+    IDeviceManagerService _deviceService,
+    IDialogService _dialogService,
+    NavigationManager _navigation,
+    ISnackbar _snackbar) : ComponentBase, IAsyncDisposable
 {
-    [Inject] private IDeviceManagerService DeviceService { get; set; } = default!;
-    [Inject] private IDialogService DialogService { get; set; } = default!;
-    [Inject] private NavigationManager Navigation { get; set; } = default!;
-
     private bool _loading = true;
     private string? _error;
     private List<DeviceDto> _devices = new();
     private HubConnection? _hub;
     private DeviceDetailsDialog? _openDialogComponent;
+
+    private readonly CancellationTokenSource _cancellationTokenSource = new();
+    private CancellationToken _cancellationToken => _cancellationTokenSource.Token;
 
     protected override async Task OnInitializedAsync()
     {
@@ -29,7 +32,7 @@ public partial class Home : ComponentBase, IAsyncDisposable
             if (!await InitializeSignalRConnection())
             {
                 // Initial fetch as fallback
-                var items = await DeviceService.GetAllDeviceStatesAsync();
+                var items = await _deviceService.GetAllDeviceStatesAsync(_cancellationToken);
                 _devices = items.ToList();
             }
         }
@@ -48,7 +51,7 @@ public partial class Home : ComponentBase, IAsyncDisposable
     {
         try
         {
-            var hubUrl = Navigation.ToAbsoluteUri("/hubs/devices");
+            var hubUrl = _navigation.ToAbsoluteUri("/hubs/devices");
 
             _hub = new HubConnectionBuilder()
                 .WithUrl(hubUrl)
@@ -59,7 +62,7 @@ public partial class Home : ComponentBase, IAsyncDisposable
             SetupSignalREventHandlers();
 
             // Start connection with timeout
-            await _hub.StartAsync();
+            await _hub.StartAsync(_cancellationToken);
             return true;
         }
         catch (Exception ex)
@@ -140,28 +143,27 @@ public partial class Home : ComponentBase, IAsyncDisposable
             CloseOnEscapeKey = true
         };
 
-        await DialogService.ShowAsync<DeviceDetailsDialog>("Device Details", parameters, options);
+        await _dialogService.ShowAsync<DeviceDetailsDialog>("Device Details", parameters, options);
     }
 
     private async Task RemoveDevice(DeviceDto device)
     {
-        var result = await DialogService.ShowMessageBoxAsync(
+        var result = await _dialogService.ShowMessageBoxAsync(
             "Confirm Device Removal",
             $"Are you sure you want to remove device '{device.DNSName}' ({DeviceHelpers.FormatMacAddress(device.MacAddress)})?",
             yesText: "Remove", cancelText: "Cancel");
 
         if (result == true)
         {
-            var success = await DeviceService.RemoveDeviceAsync(device.MacAddress);
+            var success = await _deviceService.RemoveDeviceAsync(device.MacAddress, _cancellationToken);
             if (!success)
             {
-                // Show error message if removal failed
-                await DialogService.ShowMessageBoxAsync(
-                    "Remove Failed",
-                    $"Failed to remove device '{device.DNSName}'. The device may have already been removed.",
-                    "OK");
+                _snackbar.Add($"Failed to remove device '{device.DNSName}'.", Severity.Error);
             }
-            // If successful, the device will be removed from the UI via SignalR notification
+            else
+            {
+                _snackbar.Add($"Device removed (${device.MacAddress}).", Severity.Success);
+            }
         }
     }
 
@@ -174,7 +176,7 @@ public partial class Home : ComponentBase, IAsyncDisposable
         }
     }
 
-    private async Task UpdateOpenDialog(GreeACLocalServer.Shared.Contracts.DeviceDto updatedDevice)
+    private async Task UpdateOpenDialog(DeviceDto updatedDevice)
     {
         if (_openDialogComponent?.Device?.MacAddress == updatedDevice.MacAddress)
         {
@@ -196,5 +198,7 @@ public partial class Home : ComponentBase, IAsyncDisposable
         {
             await _hub.DisposeAsync();
         }
+        await _cancellationTokenSource.CancelAsync();
+        _cancellationTokenSource.Dispose();
     }
 }
