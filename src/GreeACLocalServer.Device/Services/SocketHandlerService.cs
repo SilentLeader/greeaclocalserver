@@ -10,6 +10,7 @@ using GreeACLocalServer.Device.Models;
 using System.Security.Cryptography.X509Certificates;
 using System.Net.Security;
 using Serilog.Context;
+using System.Security.Authentication;
 
 namespace GreeACLocalServer.Device.Services;
 
@@ -136,7 +137,7 @@ internal class SocketHandlerService(
     private async Task HandleClientAsync(TcpClient client, bool isTLS)
     {
         var clientIPAddress = (client.Client.RemoteEndPoint as IPEndPoint)?.Address.ToString();
-        
+
         using (LogContext.PushProperty("ConnectionId", Guid.NewGuid().ToString("N")[..8]))
         {
             _logger.LogDebug("Client connected from {IpAddress}", clientIPAddress);
@@ -148,31 +149,49 @@ internal class SocketHandlerService(
                 if (isTLS)
                 {
                     var sslStream = new SslStream(client.GetStream(), false, ValidateCertificate);
-                    await sslStream.AuthenticateAsServerAsync(_tlsCertificate!);
+
+                    // Support legacy ssl protocols
+#pragma warning disable CS0618 // Type or member is obsolete
+#pragma warning disable SYSLIB0039 // Type or member is obsolete
+
+                    var authOptions = new SslServerAuthenticationOptions
+                    {
+                        ServerCertificate = _tlsCertificate!,
+                        ClientCertificateRequired = false,
+                        EnabledSslProtocols = SslProtocols.Ssl3 |
+                                              SslProtocols.Tls |
+                                              SslProtocols.Tls11 |
+                                              SslProtocols.Tls12 |
+                                              SslProtocols.Tls13
+                    };
+#pragma warning restore SYSLIB0039 // Type or member is obsolete
+#pragma warning restore CS0618 // Type or member is obsolete
+
+                    await sslStream.AuthenticateAsServerAsync(authOptions, _cancellationToken);
                     _logger.LogDebug("TLS handshake completed successfully");
                     clientStream = sslStream;
                 }
 
-                using var sWriter = new StreamWriter(clientStream, Encoding.ASCII);
-                using var sReader = new StreamReader(clientStream, Encoding.ASCII);
+                using var sWriter = new StreamWriter(clientStream, Encoding.UTF8);
+                using var sReader = new StreamReader(clientStream, Encoding.UTF8);
                 client.ReceiveTimeout = ServerOption.ReceiveTimeout;
                 bool isClientConnected = true;
 
                 while (isClientConnected && _isRunning)
                 {
-                    var data = sReader.ReadLine();
+                    var data = await sReader.ReadLineAsync(_cancellationToken);
                     if (data == null)
                     {
                         break;
                     }
 
-                    var response = _greeHandler.GetResponse(data);
+                    var response = _greeHandler.GetResponse(data, isTLS);
                     isClientConnected = response.KeepAlive;
 
                     if (!string.IsNullOrEmpty(response.Data))
                     {
-                        sWriter.WriteLine(response.Data);
-                        sWriter.Flush();
+                        await sWriter.WriteLineAsync(response.Data.AsMemory(), _cancellationToken);
+                        await sWriter.FlushAsync(_cancellationToken);
                     }
 
                     if (!string.IsNullOrEmpty(response.MacAddress))
