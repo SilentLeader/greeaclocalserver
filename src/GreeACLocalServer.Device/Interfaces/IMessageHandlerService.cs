@@ -4,5 +4,5 @@ namespace GreeACLocalServer.Device.Interfaces;
 
 public interface IMessageHandlerService
 {
-    GreeHandlerResponse GetResponse(string input);
+    GreeHandlerResponse GetResponse(string input, bool isTLS = false);
 }

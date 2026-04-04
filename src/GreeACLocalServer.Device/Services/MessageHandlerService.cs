@@ -22,7 +22,7 @@ internal class MessageHandlerService(ICryptoService cryptoService, IOptions<Serv
     private readonly ServerOptions _deviceHandlerOptions = serverOptions?.Value ?? throw new ArgumentNullException(nameof(serverOptions));
     private readonly ILogger<MessageHandlerService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-    public GreeHandlerResponse GetResponse(string input)
+    public GreeHandlerResponse GetResponse(string input, bool isTLS = false)
     {
         if (string.IsNullOrWhiteSpace(input))
         {
@@ -52,7 +52,7 @@ internal class MessageHandlerService(ICryptoService cryptoService, IOptions<Serv
         _logger.LogDebug("Processing request type {RequestType}", request.Type);
         var response = request.Type switch
         {
-            CommandType.Discover => HandleDiscover(request),
+            CommandType.Discover => HandleDiscover(request, isTLS),
             CommandType.Pack => HandlePack(request),
             CommandType.Time => HandleTime(),
             CommandType.HeartBeat => HandleHeartbeat(),
@@ -60,14 +60,14 @@ internal class MessageHandlerService(ICryptoService cryptoService, IOptions<Serv
         };
 
         _logger.LogDebug("Response generated for request type {RequestType}", request.Type);
-        response.Data = response.Data.Trim() + "\n";
+        response.Data = response.Data.Trim();
         response.MacAddress = !string.IsNullOrWhiteSpace(request.MacAddress) ? request.MacAddress : request.CID;
         _logger.LogDebug("Response data {data}", response.Data);
 
         return response;
     }
 
-    private GreeHandlerResponse HandleDiscover(DefaultRequest req)
+    private GreeHandlerResponse HandleDiscover(DefaultRequest req, bool isTLS)
     {
         _logger.LogDebug("Handling Discover request");
 
@@ -77,14 +77,14 @@ internal class MessageHandlerService(ICryptoService cryptoService, IOptions<Serv
         var discoverResponse = new DiscoverResponse
         {
             ServerHost = _deviceHandlerOptions.DomainName,
-            ServerPort = ServerOption.PORT,
+            ServerPort = isTLS ? ServerOption.TLS_PORT : ServerOption.PORT,
             HostOrIpAddress = _deviceHandlerOptions.ExternalIp,
             Ip = _deviceHandlerOptions.ExternalIp,
             SecondaryIp = _deviceHandlerOptions.ExternalIp,
-            Protocol = "TCP",
+            Protocol = isTLS ? "" : "TCP",
             ResponseType = ResponseType.Server,
-            TcpPort = ServerOption.PORT,
-            UdpPort = ServerOption.PORT
+            TcpPort = isTLS ? ServerOption.TLS_PORT : ServerOption.PORT,
+            UdpPort = isTLS ? ServerOption.TLS_PORT : ServerOption.PORT
         };
 
         var rawPackData = JsonSerializer.Serialize(discoverResponse, _jsonSerializerOptions);
