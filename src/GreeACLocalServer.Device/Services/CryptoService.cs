@@ -1,3 +1,4 @@
+using System.Net;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -11,7 +12,7 @@ namespace GreeACLocalServer.Device.Services;
 internal class CryptoService(IOptionsMonitor<EncryptionOptions> options, ILogger<CryptoService> _logger) : ICryptoService
 {
     private string _defaultCryptoKey => string.IsNullOrEmpty(options.CurrentValue.DefaultCryptoKey)
-        ? throw new InvalidOperationException("GreeServer:DeviceManagementOptions:DefaultCryptoKey must be configured.")
+        ? throw new InvalidOperationException("GreeServer:EncryptionOptions:DefaultCryptoKey must be configured.")
         : options.CurrentValue.DefaultCryptoKey;
 
     private EncryptionOptions _options => options.CurrentValue;
@@ -85,11 +86,15 @@ internal class CryptoService(IOptionsMonitor<EncryptionOptions> options, ILogger
         if (!string.IsNullOrWhiteSpace(_options.TLSCertificatePath)
             && File.Exists(_options.TLSCertificatePath))
         {
-            var certExtension = Path.GetExtension(_options.TLSCertificatePath);
+            var ext = Path.GetExtension(_options.TLSCertificatePath);
+            var isPkcs12 = ext.Equals(".pfx", StringComparison.OrdinalIgnoreCase)
+                        || ext.Equals(".p12", StringComparison.OrdinalIgnoreCase);
 
-            if (certExtension?.Equals("pfx", StringComparison.CurrentCultureIgnoreCase) ?? false)
+            if (isPkcs12)
             {
-                return X509CertificateLoader.LoadPkcs12FromFile(_options.TLSCertificatePath, _options.TLSCertificatePassword);
+                return X509CertificateLoader.LoadPkcs12FromFile(
+                    _options.TLSCertificatePath,
+                    string.IsNullOrEmpty(_options.TLSCertificatePassword) ? null : _options.TLSCertificatePassword);
             }
 
             return X509CertificateLoader.LoadCertificateFromFile(_options.TLSCertificatePath);
@@ -100,17 +105,18 @@ internal class CryptoService(IOptionsMonitor<EncryptionOptions> options, ILogger
             var certificate = GenerateSelfSignedCert(hostName ?? "localhost");
             if (!string.IsNullOrWhiteSpace(_options.TLSCertificatePath))
             {
-                var rawData = string.IsNullOrWhiteSpace(_options.TLSCertificatePassword)
-                    ? certificate.Export(X509ContentType.Pfx, _options.TLSCertificatePassword)
-                    : certificate.RawData;
+                var export = certificate.Export(
+                    X509ContentType.Pfx,
+                    string.IsNullOrEmpty(_options.TLSCertificatePassword) ? null : _options.TLSCertificatePassword);
 
-                File.WriteAllBytes(_options.TLSCertificatePath, rawData);
+                File.WriteAllBytes(_options.TLSCertificatePath, export);
             }
 
             return certificate;
         }
 
-        throw new ArgumentNullException(_options.TLSCertificatePath, "TLS cerrtificate not found");
+        throw new InvalidOperationException(
+            $"TLS certificate not found at '{_options.TLSCertificatePath}' and GreeServer:EncryptionOptions:TLSCertificateAutoCreate is disabled.");
     }
 
     private X509Certificate2 GenerateSelfSignedCert(string commonName, string organization = "Gree", string unit = "Unit")
@@ -123,11 +129,36 @@ internal class CryptoService(IOptionsMonitor<EncryptionOptions> options, ILogger
             HashAlgorithmName.SHA256,
             RSASignaturePadding.Pkcs1);
 
+        request.CertificateExtensions.Add(
+            new X509BasicConstraintsExtension(false, false, 0, true));
+        request.CertificateExtensions.Add(
+            new X509KeyUsageExtension(
+                X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment,
+                false));
+        request.CertificateExtensions.Add(
+            new X509EnhancedKeyUsageExtension(
+                new OidCollection { new Oid("1.3.6.1.5.5.7.3.1") }, // serverAuth
+                false));
+
+        var sanBuilder = new SubjectAlternativeNameBuilder();
+        sanBuilder.AddDnsName(commonName);
+        if (!string.Equals(commonName, "localhost", StringComparison.OrdinalIgnoreCase))
+        {
+            sanBuilder.AddDnsName("localhost");
+        }
+
+        if (IPAddress.TryParse(commonName, out var ip))
+        {
+            sanBuilder.AddIpAddress(ip);
+        }
+
+        request.CertificateExtensions.Add(sanBuilder.Build());
+
         var cert = request.CreateSelfSigned(
-            DateTimeOffset.Now,
+            DateTimeOffset.Now.AddDays(-1),
             DateTimeOffset.Now.AddYears(10));
 
-        _logger.LogDebug("Generated self-signed certifiacet with common name: {commonName}", commonName);
+        _logger.LogDebug("Generated self-signed certificate with common name: {commonName}", commonName);
 
         return cert;
     }
