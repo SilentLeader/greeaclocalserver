@@ -22,6 +22,8 @@ internal class SocketHandlerService(
     ICryptoService cryptoService,
     ILogger<SocketHandlerService> logger) : ISocketHandlerService
 {
+    private static readonly Encoding Utf8NoBom = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+
     private readonly ConcurrentBag<TcpListener> _servers = [];
     private volatile bool _isRunning;
     private X509Certificate2? _tlsCertificate;
@@ -142,13 +144,14 @@ internal class SocketHandlerService(
         {
             _logger.LogDebug("Client connected from {IpAddress}", clientIPAddress);
 
+            SslStream? sslStream = null;
             try
             {
                 Stream clientStream = client.GetStream();
 
                 if (isTLS)
                 {
-                    var sslStream = new SslStream(client.GetStream(), false, ValidateCertificate);
+                    sslStream = new SslStream(clientStream, false, ValidateCertificate);
 
                     // Support legacy ssl protocols
 #pragma warning disable CS0618 // Type or member is obsolete
@@ -172,37 +175,40 @@ internal class SocketHandlerService(
                     clientStream = sslStream;
                 }
 
-                using var sWriter = new StreamWriter(clientStream, Encoding.UTF8);
-                using var sReader = new StreamReader(clientStream, Encoding.UTF8);
                 client.ReceiveTimeout = ServerOption.ReceiveTimeout;
-                bool isClientConnected = true;
 
-                while (isClientConnected && _isRunning)
+                using (var sReader = new StreamReader(clientStream, Utf8NoBom, detectEncodingFromByteOrderMarks: true, bufferSize: 1024, leaveOpen: true))
+                using (var sWriter = new StreamWriter(clientStream, Utf8NoBom, bufferSize: 1024, leaveOpen: true) { AutoFlush = false, NewLine = "\n" })
                 {
-                    var data = await sReader.ReadLineAsync(_cancellationToken);
-                    if (data == null)
-                    {
-                        break;
-                    }
+                    bool isClientConnected = true;
 
-                    var response = _greeHandler.GetResponse(data, isTLS);
-                    isClientConnected = response.KeepAlive;
-
-                    if (!string.IsNullOrEmpty(response.Data))
+                    while (isClientConnected && _isRunning)
                     {
-                        await sWriter.WriteLineAsync(response.Data.AsMemory(), _cancellationToken);
-                        await sWriter.FlushAsync(_cancellationToken);
-                    }
-
-                    if (!string.IsNullOrEmpty(response.MacAddress))
-                    {
-                        _deviceEventPublisher.DeviceConnected(new DeviceConnectedMessage
+                        var data = await sReader.ReadLineAsync(_cancellationToken);
+                        if (data == null)
                         {
-                            MacAddress = response.MacAddress,
-                            IPAddress = clientIPAddress
-                        });
+                            break;
+                        }
+
+                        var response = _greeHandler.GetResponse(data, isTLS);
+                        isClientConnected = response.KeepAlive;
+
+                        if (!string.IsNullOrEmpty(response.Data))
+                        {
+                            await sWriter.WriteLineAsync(response.Data.AsMemory(), _cancellationToken);
+                            await sWriter.FlushAsync(_cancellationToken);
+                        }
+
+                        if (!string.IsNullOrEmpty(response.MacAddress))
+                        {
+                            _deviceEventPublisher.DeviceConnected(new DeviceConnectedMessage
+                            {
+                                MacAddress = response.MacAddress,
+                                IPAddress = clientIPAddress
+                            });
+                        }
                     }
-                }
+                } // flush + dispose the readers/writers while the stream is still open
             }
             catch (IOException e)
             {
@@ -215,6 +221,7 @@ internal class SocketHandlerService(
             finally
             {
                 _logger.LogDebug("Connection closed");
+                sslStream?.Dispose();
                 client.Close();
             }
         }
