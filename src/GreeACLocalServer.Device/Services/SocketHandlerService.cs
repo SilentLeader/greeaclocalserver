@@ -25,8 +25,11 @@ internal class SocketHandlerService(
     private static readonly Encoding Utf8NoBom = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
 
     private readonly ConcurrentBag<TcpListener> _servers = [];
+    private readonly List<Task> _acceptLoops = [];
+    private readonly object _lifecycleLock = new();
     private volatile bool _isRunning;
     private X509Certificate2? _tlsCertificate;
+    private SemaphoreSlim? _connectionLimiter;
 
     private readonly IMessageHandlerService _greeHandler = greeHandler;
     private readonly IDeviceEventPublisher _deviceEventPublisher = deviceEventPublisher;
@@ -34,46 +37,95 @@ internal class SocketHandlerService(
     private readonly ServerOptions _serverOptions = serverOptions.Value;
     private readonly ILogger<SocketHandlerService> _logger = logger;
 
-    private readonly CancellationTokenSource _cancellationTokenSource = new();
+    private CancellationTokenSource _cancellationTokenSource = new();
     private CancellationToken _cancellationToken => _cancellationTokenSource.Token;
 
     public void Start()
     {
-        _logger.LogDebug("Gree AC server starting...");
-        if (_serverOptions.TLSEnabled)
+        lock (_lifecycleLock)
         {
-            _logger.LogDebug("GREE device TLS listener certificate loading...");
-            _tlsCertificate = _cryptoService.GetCertificate(_serverOptions.DomainName);
-            _logger.LogDebug("GREE device TLS listener certificate loaded. (Common name: {Subject})", _tlsCertificate.Subject);
+            StartCore();
+        }
+    }
+
+    private void StartCore()
+    {
+        if (_isRunning)
+        {
+            _logger.LogDebug("Gree AC server already running, ignoring Start()");
+            return;
         }
 
-        if (_serverOptions.ListenIPAddresses.Any())
+        _logger.LogDebug("Gree AC server starting...");
+
+        // A previous Stop() cancelled the token; a CTS cannot be reset, so make a
+        // fresh one before this run.
+        if (_cancellationTokenSource.IsCancellationRequested)
         {
-            foreach (var ip in _serverOptions.ListenIPAddresses)
-            {
-                _servers.Add(new TcpListener(IPAddress.Parse(ip), ServerOption.PORT));
-                if (_serverOptions.TLSEnabled)
-                {
-                    _servers.Add(new TcpListener(IPAddress.Parse(ip), ServerOption.TLS_PORT));
-                }
-            }
+            _cancellationTokenSource.Dispose();
+            _cancellationTokenSource = new CancellationTokenSource();
         }
-        else
+
+        var maxConnections = _serverOptions.MaxConcurrentConnections > 0
+            ? _serverOptions.MaxConcurrentConnections
+            : int.MaxValue;
+        _connectionLimiter = new SemaphoreSlim(maxConnections, maxConnections);
+        _acceptLoops.Clear();
+
+        try
         {
-            _servers.Add(new TcpListener(IPAddress.Any, ServerOption.PORT));
             if (_serverOptions.TLSEnabled)
             {
-                _servers.Add(new TcpListener(IPAddress.Any, ServerOption.TLS_PORT));
+                _logger.LogDebug("GREE device TLS listener certificate loading...");
+                _tlsCertificate = _cryptoService.GetCertificate(_serverOptions.DomainName);
+                _logger.LogDebug("GREE device TLS listener certificate loaded. (Common name: {Subject})", _tlsCertificate.Subject);
+            }
+
+            if (_serverOptions.ListenIPAddresses.Any())
+            {
+                foreach (var ip in _serverOptions.ListenIPAddresses)
+                {
+                    _servers.Add(new TcpListener(IPAddress.Parse(ip), ServerOption.PORT));
+                    if (_serverOptions.TLSEnabled)
+                    {
+                        _servers.Add(new TcpListener(IPAddress.Parse(ip), ServerOption.TLS_PORT));
+                    }
+                }
+            }
+            else
+            {
+                _servers.Add(new TcpListener(IPAddress.Any, ServerOption.PORT));
+                if (_serverOptions.TLSEnabled)
+                {
+                    _servers.Add(new TcpListener(IPAddress.Any, ServerOption.TLS_PORT));
+                }
+            }
+
+            _isRunning = true;
+
+            foreach (var server in _servers)
+            {
+                server.Start();
+                _acceptLoops.Add(Task.Run(() => AcceptClientsLoop(server)));
             }
         }
-
-        foreach (var server in _servers)
+        catch
         {
-            server.Start();
-            Task.Run(() => AcceptClientsLoop(server));
+            // Roll back partial state so a later Start() (or the host retrying) is not
+            // blocked by the `if (_isRunning) return` guard on a half-initialised server.
+            _isRunning = false;
+            _cancellationTokenSource.Cancel();
+            foreach (var server in _servers)
+            {
+                try { server.Stop(); } catch { /* best effort */ }
+            }
+            _servers.Clear();
+            _acceptLoops.Clear();
+            _tlsCertificate?.Dispose();
+            _tlsCertificate = null;
+            _connectionLimiter = null;
+            throw;
         }
-
-        _isRunning = true;
 
         _logger.LogInformation("Gree AC server started");
         _logger.LogInformation("Domainname for AC Devices: {DomainName}", _serverOptions.DomainName);
@@ -87,16 +139,46 @@ internal class SocketHandlerService(
 
     public void Stop()
     {
-        _isRunning = false;
-        _cancellationTokenSource?.Cancel();
-        _logger.LogDebug("Gree AC server stopping...");
-
-        foreach (var server in _servers)
+        lock (_lifecycleLock)
         {
-            server.Stop();
-        }
+            if (!_isRunning)
+            {
+                _logger.LogDebug("Gree AC server not running, ignoring Stop()");
+                return;
+            }
 
-        _logger.LogInformation("Server stopped");
+            _isRunning = false;
+            _cancellationTokenSource.Cancel();
+            _logger.LogDebug("Gree AC server stopping...");
+
+            foreach (var server in _servers)
+            {
+                server.Stop();
+            }
+            _servers.Clear();
+
+            try
+            {
+                Task.WhenAll(_acceptLoops).Wait(TimeSpan.FromSeconds(5));
+            }
+            catch (Exception e)
+            {
+                _logger.LogDebug(e, "Accept loop(s) faulted during shutdown");
+            }
+            _acceptLoops.Clear();
+
+            // Not disposed on purpose: a client handler that is still unwinding will
+            // call _connectionLimiter.Release() from its finally block. Release() on an
+            // orphaned (but not disposed) SemaphoreSlim is harmless; Release() on a
+            // disposed one throws. Nobody touches AvailableWaitHandle, so skipping
+            // Dispose() leaks nothing meaningful.
+            _connectionLimiter = null;
+
+            _tlsCertificate?.Dispose();
+            _tlsCertificate = null;
+
+            _logger.LogInformation("Server stopped");
+        }
     }
 
     private async Task AcceptClientsLoop(TcpListener server)
@@ -108,14 +190,32 @@ internal class SocketHandlerService(
                 var newClient = await server.AcceptTcpClientAsync(_cancellationToken);
                 if (_cancellationToken.IsCancellationRequested)
                 {
+                    newClient.Dispose();
                     continue;
                 }
                 var isTls = server.LocalEndpoint is IPEndPoint { Port: ServerOption.TLS_PORT };
-                _ = Task.Run(() => HandleClientAsync(newClient, isTls));
+
+                var limiter = _connectionLimiter;
+                if (limiter is not null && !await limiter.WaitAsync(TimeSpan.Zero, _cancellationToken))
+                {
+                    _logger.LogWarning(
+                        "Concurrent connection limit ({Limit}) reached, dropping client {IpAddress}",
+                        _serverOptions.MaxConcurrentConnections,
+                        (newClient.Client.RemoteEndPoint as IPEndPoint)?.Address);
+                    newClient.Close();
+                    continue;
+                }
+
+                _ = Task.Run(() => HandleClientAsync(newClient, isTls, limiter));
             }
             catch (ObjectDisposedException)
             {
                 // Listener stopped, exit loop
+                break;
+            }
+            catch (OperationCanceledException)
+            {
+                // Stop() cancelled the token, exit loop
                 break;
             }
             catch (SocketException e)
@@ -136,7 +236,7 @@ internal class SocketHandlerService(
         }
     }
 
-    private async Task HandleClientAsync(TcpClient client, bool isTLS)
+    private async Task HandleClientAsync(TcpClient client, bool isTLS, SemaphoreSlim? connectionLimiter)
     {
         var clientIPAddress = (client.Client.RemoteEndPoint as IPEndPoint)?.Address.ToString();
 
@@ -177,6 +277,10 @@ internal class SocketHandlerService(
 
                 client.ReceiveTimeout = ServerOption.ReceiveTimeout;
 
+                var idleTimeout = _serverOptions.IdleTimeoutSeconds > 0
+                    ? TimeSpan.FromSeconds(_serverOptions.IdleTimeoutSeconds)
+                    : Timeout.InfiniteTimeSpan;
+
                 using (var sReader = new StreamReader(clientStream, Utf8NoBom, detectEncodingFromByteOrderMarks: true, bufferSize: 1024, leaveOpen: true))
                 using (var sWriter = new StreamWriter(clientStream, Utf8NoBom, bufferSize: 1024, leaveOpen: true) { AutoFlush = false, NewLine = "\n" })
                 {
@@ -184,11 +288,27 @@ internal class SocketHandlerService(
 
                     while (isClientConnected && _isRunning)
                     {
-                        var data = await sReader.ReadLineAsync(_cancellationToken);
-                        if (data == null)
+                        var read = await ClientLineReader.ReadLineAsync(
+                            sReader, idleTimeout, ServerOption.MaxLineLength, _cancellationToken);
+
+                        if (read.Outcome == ClientLineReader.ReadOutcome.Closed)
                         {
                             break;
                         }
+                        if (read.Outcome == ClientLineReader.ReadOutcome.IdleTimeout)
+                        {
+                            _logger.LogDebug("Client idle for {IdleSeconds}s, closing connection", idleTimeout.TotalSeconds);
+                            break;
+                        }
+                        if (read.Outcome == ClientLineReader.ReadOutcome.LineTooLong)
+                        {
+                            _logger.LogWarning(
+                                "Client sent a line longer than {MaxLineLength} characters, closing connection",
+                                ServerOption.MaxLineLength);
+                            break;
+                        }
+
+                        var data = read.Line!;
 
                         var response = _greeHandler.GetResponse(data, isTLS);
                         isClientConnected = response.KeepAlive;
@@ -210,6 +330,10 @@ internal class SocketHandlerService(
                     }
                 } // flush + dispose the readers/writers while the stream is still open
             }
+            catch (OperationCanceledException)
+            {
+                // Server shutting down.
+            }
             catch (IOException e)
             {
                 _logger.LogWarning(e, "Client connection closed or timed out");
@@ -223,6 +347,7 @@ internal class SocketHandlerService(
                 _logger.LogDebug("Connection closed");
                 sslStream?.Dispose();
                 client.Close();
+                connectionLimiter?.Release();
             }
         }
     }
