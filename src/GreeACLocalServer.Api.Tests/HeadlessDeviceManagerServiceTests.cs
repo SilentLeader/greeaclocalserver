@@ -178,10 +178,10 @@ public class HeadlessDeviceManagerServiceTests
     }
 
     [Fact]
-    public void Constructor_WithNullOptions_ThrowsNullReferenceException()
+    public void Constructor_WithNullOptions_ThrowsArgumentNullException()
     {
         // Arrange, Act & Assert
-        Assert.Throws<NullReferenceException>(() =>
+        Assert.Throws<ArgumentNullException>(() =>
             new HeadlessDeviceManagerService(null!, _mockDnsResolver.Object));
     }
 

@@ -12,7 +12,7 @@ public class HeadlessDeviceManagerService(
 
 {
     protected readonly ConcurrentDictionary<string, AcDeviceState> _deviceStates = new();
-    protected readonly DeviceManagerOptions _options = options.CurrentValue;
+    protected readonly IOptionsMonitor<DeviceManagerOptions> _options = options ?? throw new ArgumentNullException(nameof(options));
     protected readonly IDnsResolverService _dnsResolver = dnsResolver;
 
     public virtual async Task UpdateOrAddAsync(string macAddress, string? ipAddress)
@@ -46,7 +46,7 @@ public class HeadlessDeviceManagerService(
 
     public virtual async Task RemoveStaleDevicesAsync()
     {
-        var threshold = DateTime.UtcNow.AddMinutes(-_options.DeviceTimeoutMinutes);
+        var threshold = DateTime.UtcNow.AddMinutes(-_options.CurrentValue.DeviceTimeoutMinutes);
         var removed = new List<string>();
         foreach (var kvp in _deviceStates)
         {

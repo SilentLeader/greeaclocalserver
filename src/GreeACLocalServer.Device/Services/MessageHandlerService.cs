@@ -10,7 +10,7 @@ using Microsoft.Extensions.Options;
 
 namespace GreeACLocalServer.Device.Services;
 
-internal class MessageHandlerService(ICryptoService cryptoService, IOptions<ServerOptions> serverOptions, ILogger<MessageHandlerService> logger) : IMessageHandlerService
+internal class MessageHandlerService(ICryptoService cryptoService, IOptionsMonitor<ServerOptions> serverOptions, ILogger<MessageHandlerService> logger) : IMessageHandlerService
 {
     private static readonly JsonSerializerOptions _jsonSerializerOptions = new JsonSerializerOptions
     {
@@ -19,7 +19,7 @@ internal class MessageHandlerService(ICryptoService cryptoService, IOptions<Serv
     };
 
     private readonly ICryptoService _cryptoService = cryptoService ?? throw new ArgumentNullException(nameof(cryptoService));
-    private readonly ServerOptions _deviceHandlerOptions = serverOptions?.Value ?? throw new ArgumentNullException(nameof(serverOptions));
+    private readonly IOptionsMonitor<ServerOptions> _serverOptions = serverOptions ?? throw new ArgumentNullException(nameof(serverOptions));
     private readonly ILogger<MessageHandlerService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
     public GreeHandlerResponse GetResponse(string input, bool isTLS = false)
@@ -80,16 +80,19 @@ internal class MessageHandlerService(ICryptoService cryptoService, IOptions<Serv
     {
         _logger.LogDebug("Handling Discover request");
 
-        ArgumentException.ThrowIfNullOrWhiteSpace(_deviceHandlerOptions.DomainName);
-        ArgumentException.ThrowIfNullOrWhiteSpace(_deviceHandlerOptions.ExternalIp);
+        // Read the current value at the use site so reloadOnChange actually applies.
+        var options = _serverOptions.CurrentValue;
+
+        ArgumentException.ThrowIfNullOrWhiteSpace(options.DomainName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(options.ExternalIp);
 
         var discoverResponse = new DiscoverResponse
         {
-            ServerHost = _deviceHandlerOptions.DomainName,
+            ServerHost = options.DomainName,
             ServerPort = isTLS ? ServerOption.TLS_PORT : ServerOption.PORT,
-            HostOrIpAddress = _deviceHandlerOptions.ExternalIp,
-            Ip = _deviceHandlerOptions.ExternalIp,
-            SecondaryIp = _deviceHandlerOptions.ExternalIp,
+            HostOrIpAddress = options.ExternalIp,
+            Ip = options.ExternalIp,
+            SecondaryIp = options.ExternalIp,
             Protocol = isTLS ? "" : "TCP",
             ResponseType = ResponseType.Server,
             TcpPort = isTLS ? ServerOption.TLS_PORT : ServerOption.PORT,
