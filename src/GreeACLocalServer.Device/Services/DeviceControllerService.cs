@@ -224,27 +224,27 @@ internal class DeviceControllerService(
     {
         for (int attempt = 0; attempt < 3; attempt++)
         {
-            UdpClient? udpClient = null;
             try
             {
                 using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 cts.CancelAfter(CommandTimeoutMs);
 
-                udpClient = new UdpClient();
-                udpClient.Client.SendTimeout = CommandTimeoutMs;
-                udpClient.Client.ReceiveTimeout = CommandTimeoutMs;
-
+                using var udpClient = new UdpClient();
                 udpClient.Connect(IPAddress.Parse(ipAddress), CommandPort);
+
                 var rawCommand = JsonSerializer.Serialize(command);
+                var sendBytes = Encoding.UTF8.GetBytes(rawCommand);
+                await udpClient.SendAsync(sendBytes, cts.Token);
 
-                var sendBytes = Encoding.ASCII.GetBytes(rawCommand);
-                udpClient.Send(sendBytes, sendBytes.Length);
+                var result = await udpClient.ReceiveAsync(cts.Token);
+                var response = Encoding.UTF8.GetString(result.Buffer);
 
-                var remoteEndPoint = new IPEndPoint(IPAddress.Any, 0);
-                var receiveBytes = udpClient.Receive(ref remoteEndPoint);
-                var response = Encoding.ASCII.GetString(receiveBytes);
-
-                return response == null ? null : JsonSerializer.Deserialize<TResult>(response);
+                return JsonSerializer.Deserialize<TResult>(response);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // Caller-initiated cancellation is not retryable.
+                throw;
             }
             catch (Exception ex) when (attempt < 2)
             {
@@ -254,11 +254,6 @@ internal class DeviceControllerService(
             catch (Exception ex)
             {
                 _logger.LogError(ex, "UDP command failed for IP {IpAddress} after {Attempts} attempts", ipAddress, attempt + 1);
-            }
-            finally
-            {
-                udpClient?.Close();
-                udpClient?.Dispose();
             }
         }
 

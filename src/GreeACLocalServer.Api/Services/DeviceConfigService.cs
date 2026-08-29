@@ -9,10 +9,36 @@ public class DeviceConfigService(ILogger<DeviceConfigService> logger, IDeviceCon
     private readonly IDeviceControllerService _deviceManagementService = deviceManagementService;
     private readonly IOptionsMonitor<ServerOptions> _serverOptions = serverOptions;
 
+    /// <summary>
+    /// Returns <c>true</c> and logs a warning when device management is disabled. All
+    /// device-config operations (query included) poke the device over UDP, so they are
+    /// gated the same way.
+    /// </summary>
+    private bool IsManagementDisabled(string ipAddress, string operation)
+    {
+        if (_serverOptions.CurrentValue.EnableManagement)
+        {
+            return false;
+        }
+
+        _logger.LogWarning("Device management is disabled. {Operation} operation rejected for IP {IpAddress}", operation, ipAddress);
+        return true;
+    }
+
     public async Task<DeviceStatusResponse> QueryDeviceStatusAsync(QueryDeviceStatusRequest request, CancellationToken cancellationToken = default)
     {
         try
         {
+            if (IsManagementDisabled(request.IpAddress, "Query device status"))
+            {
+                return new DeviceStatusResponse
+                {
+                    Success = false,
+                    Message = "Device management is disabled",
+                    ErrorCode = "MANAGEMENT_DISABLED"
+                };
+            }
+
             var result = await _deviceManagementService.GetDeviceStatusAsync(new GetDeviceStatusRequest(request.IpAddress), cancellationToken);
 
             if (!result.IsSuccess)
@@ -49,10 +75,8 @@ public class DeviceConfigService(ILogger<DeviceConfigService> logger, IDeviceCon
     {
         try
         {
-            // Check if management is enabled
-            if (!_serverOptions.CurrentValue.EnableManagement)
+            if (IsManagementDisabled(request.IpAddress, "Set device name"))
             {
-                _logger.LogWarning("Device management is disabled. Set device name operation rejected for IP {IpAddress}", request.IpAddress);
                 return new DeviceOperationResponse
                 {
                     Success = false,
@@ -96,10 +120,8 @@ public class DeviceConfigService(ILogger<DeviceConfigService> logger, IDeviceCon
     {
         try
         {
-            // Check if management is enabled
-            if (!_serverOptions.CurrentValue.EnableManagement)
+            if (IsManagementDisabled(request.IpAddress, "Set remote host"))
             {
-                _logger.LogWarning("Device management is disabled. Set remote host operation rejected for IP {IpAddress}", request.IpAddress);
                 return new DeviceOperationResponse
                 {
                     Success = false,
