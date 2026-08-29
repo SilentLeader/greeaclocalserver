@@ -13,6 +13,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GreeACLocalServer.Shared", 
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GreeACLocalServer.Device", "GreeACLocalServer.Device\GreeACLocalServer.Device.csproj", "{F8615D0F-FB1B-413A-933D-17763274D604}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GreeACLocalServer.Device.Tests", "GreeACLocalServer.Device.Tests\GreeACLocalServer.Device.Tests.csproj", "{DA5B3577-C24D-47CA-A84B-8207235D0FAB}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -83,6 +85,18 @@ Global
 		{F8615D0F-FB1B-413A-933D-17763274D604}.Release|x64.Build.0 = Release|Any CPU
 		{F8615D0F-FB1B-413A-933D-17763274D604}.Release|x86.ActiveCfg = Release|Any CPU
 		{F8615D0F-FB1B-413A-933D-17763274D604}.Release|x86.Build.0 = Release|Any CPU
+		{DA5B3577-C24D-47CA-A84B-8207235D0FAB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DA5B3577-C24D-47CA-A84B-8207235D0FAB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DA5B3577-C24D-47CA-A84B-8207235D0FAB}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{DA5B3577-C24D-47CA-A84B-8207235D0FAB}.Debug|x64.Build.0 = Debug|Any CPU
+		{DA5B3577-C24D-47CA-A84B-8207235D0FAB}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{DA5B3577-C24D-47CA-A84B-8207235D0FAB}.Debug|x86.Build.0 = Debug|Any CPU
+		{DA5B3577-C24D-47CA-A84B-8207235D0FAB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DA5B3577-C24D-47CA-A84B-8207235D0FAB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DA5B3577-C24D-47CA-A84B-8207235D0FAB}.Release|x64.ActiveCfg = Release|Any CPU
+		{DA5B3577-C24D-47CA-A84B-8207235D0FAB}.Release|x64.Build.0 = Release|Any CPU
+		{DA5B3577-C24D-47CA-A84B-8207235D0FAB}.Release|x86.ActiveCfg = Release|Any CPU
+		{DA5B3577-C24D-47CA-A84B-8207235D0FAB}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
