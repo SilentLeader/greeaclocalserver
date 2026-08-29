@@ -12,7 +12,7 @@ namespace GreeACLocalServer.Device.Services;
 
 internal class MessageHandlerService(ICryptoService cryptoService, IOptions<ServerOptions> serverOptions, ILogger<MessageHandlerService> logger) : IMessageHandlerService
 {
-    private static JsonSerializerOptions _jsonSerializerOptions = new JsonSerializerOptions
+    private static readonly JsonSerializerOptions _jsonSerializerOptions = new JsonSerializerOptions
     {
         PropertyNamingPolicy = JsonNamingPolicy.KebabCaseLower,
         WriteIndented = false
@@ -50,14 +50,23 @@ internal class MessageHandlerService(ICryptoService cryptoService, IOptions<Serv
         }
 
         _logger.LogDebug("Processing request type {RequestType}", request.Type);
-        var response = request.Type switch
+        GreeHandlerResponse response;
+        try
         {
-            CommandType.Discover => HandleDiscover(request, isTLS),
-            CommandType.Pack => HandlePack(request),
-            CommandType.Time => HandleTime(),
-            CommandType.HeartBeat => HandleHeartbeat(),
-            _ => HandleUnknownCommand(),
-        };
+            response = request.Type switch
+            {
+                CommandType.Discover => HandleDiscover(request, isTLS),
+                CommandType.Pack => HandlePack(request),
+                CommandType.Time => HandleTime(),
+                CommandType.HeartBeat => HandleHeartbeat(),
+                _ => HandleUnknownCommand(),
+            };
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            _logger.LogWarning(e, "Failed to handle device request of type {RequestType}", request.Type);
+            response = HandleUnknownCommand();
+        }
 
         _logger.LogDebug("Response generated for request type {RequestType}", request.Type);
         response.Data = response.Data.Trim();
@@ -111,7 +120,33 @@ internal class MessageHandlerService(ICryptoService cryptoService, IOptions<Serv
 
     private GreeHandlerResponse HandlePack(DefaultRequest req)
     {
-        Pack? pack = JsonSerializer.Deserialize<Pack>(_cryptoService.Decrypt(req.Pack));
+        if (string.IsNullOrEmpty(req.Pack))
+        {
+            _logger.LogWarning("Pack request received with an empty pack payload");
+            return new GreeHandlerResponse
+            {
+                Data = string.Empty,
+                KeepAlive = false,
+                MacAddress = req.MacAddress
+            };
+        }
+
+        Pack? pack;
+        try
+        {
+            pack = JsonSerializer.Deserialize<Pack>(_cryptoService.Decrypt(req.Pack));
+        }
+        catch (Exception e) when (e is FormatException or JsonException or System.Security.Cryptography.CryptographicException)
+        {
+            _logger.LogWarning(e, "Failed to decrypt or parse pack payload");
+            return new GreeHandlerResponse
+            {
+                Data = string.Empty,
+                KeepAlive = false,
+                MacAddress = req.MacAddress
+            };
+        }
+
         if (pack == null)
         {
             _logger.LogWarning("Pack deserialization returned null");
@@ -177,7 +212,14 @@ internal class MessageHandlerService(ICryptoService cryptoService, IOptions<Serv
         var responseData = new TimeResponse
         {
             ResponseType = ResponseType.Time,
-            Time = DateTime.Now.ToLocalTime().ToString("yyyy-MM-ddHH:mm:ss")
+            // NOTE (WP-03/F10): the format string has no separator between the date and
+            // time parts ("2026-08-2914:30:00"). The referenced implementations
+            // (gree_versati, python-gree, homebridge-gree) suggest a space-separated
+            // "yyyy-MM-dd HH:mm:ss" is expected, but this could not be independently
+            // confirmed against a real device, so the on-the-wire format is left
+            // unchanged. Only the redundant .ToLocalTime() (DateTime.Now is already
+            // local) has been removed.
+            Time = DateTime.Now.ToString("yyyy-MM-ddHH:mm:ss")
         };
 
         return new GreeHandlerResponse
@@ -213,8 +255,16 @@ internal class MessageHandlerService(ICryptoService cryptoService, IOptions<Serv
         };
     }
 
-    private static string NormalizeMac(string obscuredMac)
+    private string NormalizeMac(string obscuredMac)
     {
+        if (obscuredMac is null || obscuredMac.Length < 16)
+        {
+            _logger.LogWarning(
+                "Cannot normalize MAC address: expected at least 16 characters, got {Length}",
+                obscuredMac?.Length ?? 0);
+            return obscuredMac ?? string.Empty;
+        }
+
         char[] obscuredArr = obscuredMac.ToCharArray();
         char[] normalizedArr = new char[12];
 
