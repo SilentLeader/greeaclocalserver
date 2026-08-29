@@ -136,7 +136,7 @@ internal class MessageHandlerService(ICryptoService cryptoService, IOptions<Serv
         {
             pack = JsonSerializer.Deserialize<Pack>(_cryptoService.Decrypt(req.Pack));
         }
-        catch (Exception e) when (e is FormatException or JsonException)
+        catch (Exception e) when (e is FormatException or JsonException or System.Security.Cryptography.CryptographicException)
         {
             _logger.LogWarning(e, "Failed to decrypt or parse pack payload");
             return new GreeHandlerResponse
