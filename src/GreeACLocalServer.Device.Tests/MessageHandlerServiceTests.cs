@@ -24,12 +24,26 @@ public class MessageHandlerServiceTests
         CryptoService? crypto = null,
         ServerOptions? options = null)
     {
-        crypto ??= CreateCrypto();
         options ??= new ServerOptions { DomainName = "gree.example.com", ExternalIp = "203.0.113.7" };
+        return CreateService(CreateMonitor(options), crypto);
+    }
+
+    private static MessageHandlerService CreateService(
+        IOptionsMonitor<ServerOptions> monitor,
+        CryptoService? crypto = null)
+    {
+        crypto ??= CreateCrypto();
         return new MessageHandlerService(
             crypto,
-            Options.Create(options),
+            monitor,
             NullLogger<MessageHandlerService>.Instance);
+    }
+
+    private static IOptionsMonitor<ServerOptions> CreateMonitor(ServerOptions options)
+    {
+        var monitor = new Mock<IOptionsMonitor<ServerOptions>>();
+        monitor.Setup(x => x.CurrentValue).Returns(() => options);
+        return monitor.Object;
     }
 
     /// <summary>Mirror of the internal NormalizeMac transform for assertions.</summary>
@@ -148,6 +162,27 @@ public class MessageHandlerServiceTests
         using var doc = JsonDocument.Parse(response.Data);
         var decrypted = crypto.Decrypt(doc.RootElement.GetProperty("pack").GetString()!);
         Assert.Contains("gree.example.com", decrypted);
+    }
+
+    [Fact]
+    public void GetResponse_Discover_PicksUpReloadedOptions()
+    {
+        var crypto = CreateCrypto();
+        var current = new ServerOptions { DomainName = "old.example.com", ExternalIp = "203.0.113.7" };
+
+        var monitor = new Mock<IOptionsMonitor<ServerOptions>>();
+        monitor.Setup(x => x.CurrentValue).Returns(() => current);
+
+        var service = CreateService(monitor.Object, crypto);
+
+        var first = service.GetResponse("{\"t\":\"dis\",\"mac\":\"AABBCC\"}");
+        Assert.Contains("old.example.com", crypto.Decrypt(JsonDocument.Parse(first.Data).RootElement.GetProperty("pack").GetString()!));
+
+        // Simulate a configuration reload.
+        current = new ServerOptions { DomainName = "new.example.com", ExternalIp = "203.0.113.7" };
+
+        var second = service.GetResponse("{\"t\":\"dis\",\"mac\":\"AABBCC\"}");
+        Assert.Contains("new.example.com", crypto.Decrypt(JsonDocument.Parse(second.Data).RootElement.GetProperty("pack").GetString()!));
     }
 
     [Fact]

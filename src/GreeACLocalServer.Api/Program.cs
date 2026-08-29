@@ -11,8 +11,13 @@ internal static class Program
 {
     private static async Task Main(string[] args)
     {
+        // Resolve the environment before any host builder exists so the early
+        // Serilog / EnableUI bootstrap honours appsettings.{Environment}.json too.
+        var environmentName = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
+            ?? Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT");
+
         var config = new ConfigurationBuilder()
-            .BuildConfiguration()
+            .BuildConfiguration(environmentName)
             .Build();
 
         Log.Logger = new LoggerConfiguration()
@@ -53,8 +58,9 @@ internal static class Program
         // Configure OS-specific hosting
         builder.Host.ConfigureHostingServices();
 
-        // Configure additional configuration sources
-        builder.Configuration.BuildConfiguration();
+        // WebApplication.CreateBuilder already loaded appsettings(.{Environment}).json
+        // and environment variables; only add the project-specific extras here.
+        builder.Configuration.AddProjectConfiguration(builder.Environment.EnvironmentName);
 
         // Configure common services
         builder.Services.ConfigureWebServices(builder.Configuration);
@@ -69,7 +75,8 @@ internal static class Program
     {
         var hostBuilder = Host.CreateDefaultBuilder(args)
             .UseSerilog()
-            .ConfigureAppConfiguration((_, config) => config.BuildConfiguration())
+            .ConfigureAppConfiguration((context, config) =>
+                config.AddProjectConfiguration(context.HostingEnvironment.EnvironmentName))
             .ConfigureServices((context, services) => services.ConfigureHeadlessServices(context.Configuration));
 
         // Configure OS-specific hosting
