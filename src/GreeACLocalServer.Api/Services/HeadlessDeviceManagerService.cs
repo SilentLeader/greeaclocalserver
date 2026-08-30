@@ -13,7 +13,7 @@ public class HeadlessDeviceManagerService(
     protected readonly ConcurrentDictionary<string, AcDeviceState> _deviceStates = new();
     protected readonly IDnsResolverService _dnsResolver = dnsResolver;
 
-    public virtual async Task UpdateOrAddAsync(string macAddress, string? ipAddress)
+    public virtual async Task UpdateOrAddAsync(string macAddress, string? ipAddress, int port = 0, bool isTls = false)
     {
         if (string.IsNullOrWhiteSpace(ipAddress))
         {
@@ -21,6 +21,7 @@ public class HeadlessDeviceManagerService(
         }
 
         var dnsName = await _dnsResolver.ResolveDnsNameAsync(ipAddress);
+        var now = DateTime.UtcNow;
 
         var state = _deviceStates.AddOrUpdate(macAddress,
             key => new AcDeviceState
@@ -28,13 +29,15 @@ public class HeadlessDeviceManagerService(
                 MacAddress = macAddress,
                 IpAddress = ipAddress,
                 DNSName = dnsName,
-                LastConnectionTime = DateTime.UtcNow
+                LastConnectionTime = now,
+                Endpoints = MergeEndpoint([], port, isTls, now)
             },
             (key, existing) => existing with
             {
                 IpAddress = ipAddress,
                 DNSName = dnsName,
-                LastConnectionTime = DateTime.UtcNow
+                LastConnectionTime = now,
+                Endpoints = MergeEndpoint(existing.Endpoints, port, isTls, now)
             });
 
         // Virtual method hook for derived classes (e.g., SignalR notifications)
@@ -43,7 +46,7 @@ public class HeadlessDeviceManagerService(
 
     public virtual Task<IEnumerable<DeviceDto>> GetAllDeviceStatesAsync(CancellationToken cancellationToken = default)
     {
-        IEnumerable<DeviceDto> result = _deviceStates.Values.Select(v => new DeviceDto(v.MacAddress, v.IpAddress, v.DNSName, v.LastConnectionTime));
+        IEnumerable<DeviceDto> result = _deviceStates.Values.Select(ToDto);
         return Task.FromResult(result);
     }
 
@@ -51,10 +54,41 @@ public class HeadlessDeviceManagerService(
     {
         if (_deviceStates.TryGetValue(macAddress, out var state))
         {
-            DeviceDto dto = new DeviceDto(state.MacAddress, state.IpAddress, state.DNSName, state.LastConnectionTime);
-            return Task.FromResult<DeviceDto?>(dto);
+            return Task.FromResult<DeviceDto?>(ToDto(state));
         }
         return Task.FromResult<DeviceDto?>(null);
+    }
+
+    /// <summary>Projects the internal device state onto the wire contract.</summary>
+    protected static DeviceDto ToDto(AcDeviceState state) => new(
+        state.MacAddress,
+        state.IpAddress,
+        state.DNSName,
+        state.LastConnectionTime,
+        state.Endpoints.Select(e => new DeviceEndpointDto(e.Port, e.IsTls, e.LastSeenUtc)).ToList());
+
+    /// <summary>
+    /// Returns a new endpoint list with the observed (<paramref name="port"/>,
+    /// <paramref name="isTls"/>) pair recorded: the matching entry's timestamp is
+    /// refreshed, or a new entry is appended. Ports &lt;= 0 (unknown) are ignored.
+    /// The result is ordered by port, then plaintext before TLS.
+    /// </summary>
+    private static IReadOnlyList<DeviceEndpoint> MergeEndpoint(
+        IReadOnlyList<DeviceEndpoint> existing, int port, bool isTls, DateTime now)
+    {
+        if (port <= 0)
+        {
+            return existing;
+        }
+
+        var merged = existing
+            .Where(e => e.Port != port || e.IsTls != isTls)
+            .Append(new DeviceEndpoint(port, isTls, now))
+            .OrderBy(e => e.Port)
+            .ThenBy(e => e.IsTls)
+            .ToList();
+
+        return merged;
     }
 
     public virtual async Task<bool> RemoveDeviceAsync(string macAddress, CancellationToken cancellationToken = default)

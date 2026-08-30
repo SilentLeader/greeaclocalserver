@@ -248,6 +248,7 @@ internal class SocketHandlerService(
     private async Task HandleClientAsync(TcpClient client, bool isTLS, SemaphoreSlim? connectionLimiter)
     {
         var clientIPAddress = (client.Client.RemoteEndPoint as IPEndPoint)?.Address.ToString();
+        var localPort = (client.Client.LocalEndPoint as IPEndPoint)?.Port ?? 0;
 
         using (LogContext.PushProperty("ConnectionId", Guid.NewGuid().ToString("N")[..8]))
         {
@@ -323,7 +324,9 @@ internal class SocketHandlerService(
                             _deviceEventPublisher.DeviceConnected(new DeviceConnectedMessage
                             {
                                 MacAddress = response.MacAddress,
-                                IPAddress = clientIPAddress
+                                IPAddress = clientIPAddress,
+                                Port = localPort,
+                                IsTls = isTLS
                             });
                         }
                     }

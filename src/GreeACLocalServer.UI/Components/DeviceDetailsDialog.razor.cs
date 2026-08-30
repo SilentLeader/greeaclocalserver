@@ -30,8 +30,13 @@ public partial class DeviceDetailsDialog : ComponentBase, IDisposable
 
     public async Task UpdateDevice(DeviceDto updatedDevice)
     {
-        Device = updatedDevice;
-        StateHasChanged();
+        // Invoked from a SignalR hub callback, which runs off the component's
+        // Dispatcher; marshal the state change back onto it.
+        await InvokeAsync(() =>
+        {
+            Device = updatedDevice;
+            StateHasChanged();
+        });
     }
 
     public void CloseDialog()
