@@ -6,12 +6,14 @@ using Microsoft.Extensions.Options;
 using Moq;
 using GreeACLocalServer.Api.Options;
 using GreeACLocalServer.Api.Services;
+using GreeACLocalServer.Device.Interfaces;
 
 namespace GreeACLocalServer.Api.Tests;
 
 public class HeadlessDeviceManagerServiceTests
 {
     private readonly Mock<IDnsResolverService> _mockDnsResolver;
+    private readonly Mock<IDeviceControllerService> _mockDeviceController;
     private readonly HeadlessDeviceManagerService _deviceManagerService;
 
     public HeadlessDeviceManagerServiceTests()
@@ -20,7 +22,9 @@ public class HeadlessDeviceManagerServiceTests
         _mockDnsResolver.Setup(x => x.ResolveDnsNameAsync(It.IsAny<string>()))
             .ReturnsAsync((string ip) => $"device-{ip.Replace(".", "-")}.local");
 
-        _deviceManagerService = new HeadlessDeviceManagerService(_mockDnsResolver.Object);
+        _mockDeviceController = new Mock<IDeviceControllerService>();
+
+        _deviceManagerService = new HeadlessDeviceManagerService(_mockDnsResolver.Object, _mockDeviceController.Object);
     }
 
     [Fact]
@@ -243,11 +247,57 @@ public class HeadlessDeviceManagerServiceTests
     public void Constructor_WithNullDnsResolver_DoesNotThrowImmediately()
     {
         // Arrange, Act & Assert - Null DNS resolver doesn't fail immediately in constructor
-        var service = new HeadlessDeviceManagerService(null!);
+        var service = new HeadlessDeviceManagerService(null!, _mockDeviceController.Object);
         Assert.NotNull(service);
 
         // But would fail when actually using DNS resolution
         // We don't test that here as it would require async testing
+    }
+
+    [Fact]
+    public async Task RefreshFirmwareAsync_KnownDevice_StoresFirmwareAndExposesItOnDto()
+    {
+        var mac = "AA:BB:CC:DD:EE:FF";
+        await _deviceManagerService.UpdateOrAddAsync(mac, "192.168.1.100");
+
+        _mockDeviceController
+            .Setup(x => x.GetDeviceFirmwareAsync(It.IsAny<GreeACLocalServer.Device.Requests.GetDeviceStatusRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new GreeACLocalServer.Device.Results.DeviceFirmwareResult(
+                true, string.Empty, hid: "362001065736+U-QCOM4004CV3.76.bin",
+                firmwareVersion: "3.76", firmwareCode: "362001065736", macAddress: mac));
+
+        var refreshed = await _deviceManagerService.RefreshFirmwareAsync(mac);
+
+        Assert.NotNull(refreshed);
+        Assert.Equal("3.76", refreshed!.FirmwareVersion);
+        Assert.Equal("362001065736", refreshed.FirmwareCode);
+
+        var reloaded = await _deviceManagerService.GetAsync(mac);
+        Assert.Equal("3.76", reloaded!.FirmwareVersion);
+    }
+
+    [Fact]
+    public async Task RefreshFirmwareAsync_UnknownDevice_ReturnsNull()
+    {
+        var result = await _deviceManagerService.RefreshFirmwareAsync("00:00:00:00:00:00");
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task RefreshFirmwareAsync_DeviceQueryFails_ReturnsNullAndKeepsState()
+    {
+        var mac = "AA:BB:CC:DD:EE:FF";
+        await _deviceManagerService.UpdateOrAddAsync(mac, "192.168.1.100");
+
+        _mockDeviceController
+            .Setup(x => x.GetDeviceFirmwareAsync(It.IsAny<GreeACLocalServer.Device.Requests.GetDeviceStatusRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new GreeACLocalServer.Device.Results.DeviceFirmwareResult(false, "NO_RESPONSE", "NO_RESPONSE"));
+
+        var result = await _deviceManagerService.RefreshFirmwareAsync(mac);
+
+        Assert.Null(result);
+        var reloaded = await _deviceManagerService.GetAsync(mac);
+        Assert.Null(reloaded!.FirmwareVersion);
     }
 
     [Fact]

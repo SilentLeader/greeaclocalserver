@@ -44,6 +44,43 @@
                 </MudItem>
 
                 <MudItem xs="12">
+                    <MudText Typo="Typo.h6" GutterBottom="true" Class="mt-4">Firmware</MudText>
+                    <MudDivider Class="mb-3" />
+                    <div class="d-flex align-center">
+                        <MudText Typo="Typo.body1">
+                            @(string.IsNullOrWhiteSpace(Device.FirmwareVersion) ? "Unknown" : $"v{Device.FirmwareVersion}")
+                        </MudText>
+                        @if (Device.UpdateAvailable == true)
+                        {
+                            <MudTooltip Text="@($"Update available: v{Device.LatestFirmwareVersion}")">
+                                <MudIcon Icon="@Icons.Material.Filled.SystemUpdateAlt" Color="Color.Warning" Size="Size.Small" Class="ml-2" />
+                            </MudTooltip>
+                        }
+                        else if (Device.UpdateAvailable == false)
+                        {
+                            <MudTooltip Text="Firmware is up to date">
+                                <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small" Class="ml-2" />
+                            </MudTooltip>
+                        }
+                        @if (_refreshingFirmware)
+                        {
+                            <MudProgressCircular Indeterminate="true" Size="Size.Small" Class="ml-2" />
+                        }
+                        else
+                        {
+                            <MudTooltip Text="Query firmware version from the device">
+                                <MudIconButton Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" Class="ml-1"
+                                               OnClick="RefreshFirmware" aria-label="Refresh firmware" />
+                            </MudTooltip>
+                        }
+                    </div>
+                    @if (Device.UpdateAvailable == true && Device.LatestFirmwareVersion is not null)
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Latest available: v@(Device.LatestFirmwareVersion)</MudText>
+                    }
+                </MudItem>
+
+                <MudItem xs="12">
                     <MudText Typo="Typo.h6" GutterBottom="true" Class="mt-4">Connection Endpoints</MudText>
                     <MudDivider Class="mb-3" />
                     @if (Device.Endpoints is null || Device.Endpoints.Count == 0)

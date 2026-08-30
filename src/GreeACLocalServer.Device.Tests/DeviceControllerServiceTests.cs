@@ -51,8 +51,11 @@ public sealed class DeviceControllerServiceTests
         private readonly CancellationTokenSource _cts = new();
         private readonly Task _loop;
 
-        public UdpDeviceStub(string statusHost, string statusName, bool reply = true)
+        private readonly string _statusHid;
+
+        public UdpDeviceStub(string statusHost, string statusName, bool reply = true, string statusHid = "362001065736+U-QCOM4004CV3.76.bin")
         {
+            _statusHid = statusHid;
             _loop = Task.Run(async () =>
             {
                 while (!_cts.IsCancellationRequested)
@@ -81,14 +84,22 @@ public sealed class DeviceControllerServiceTests
                         "scan" => JsonSerializer.Serialize(new { mac = Mac }),
                         "pack" when doc.RootElement.TryGetProperty("i", out var i) && i.GetInt32() == 1
                             => JsonSerializer.Serialize(new { t = "bindok", key = CryptoKey }),
-                        _ => JsonSerializer.Serialize(new
-                        {
-                            t = "ok",
-                            r = 200,
-                            cols = new[] { "host", "name" },
-                            dat = new[] { statusHost, statusName },
-                        }),
+                        _ => BuildStatusReply(doc.RootElement.GetProperty("pack").GetString()!),
                     };
+
+                    string BuildStatusReply(string innerJson)
+                    {
+                        using var innerDoc = JsonDocument.Parse(innerJson);
+                        var cols = innerDoc.RootElement.GetProperty("cols").EnumerateArray().Select(c => c.GetString()).ToArray();
+                        var dat = cols.Select(c => c switch
+                        {
+                            "host" => statusHost,
+                            "name" => statusName,
+                            "hid" => _statusHid,
+                            _ => string.Empty,
+                        }).ToArray();
+                        return JsonSerializer.Serialize(new { t = "ok", r = 200, cols, dat });
+                    }
 
                     var envelope = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { t = "pack", pack = inner }));
                     await _udp.SendAsync(envelope, received.RemoteEndPoint, _cts.Token);
@@ -118,6 +129,32 @@ public sealed class DeviceControllerServiceTests
         Assert.Equal(accentedName, result.DeviceName);
         Assert.Equal("host.example.com", result.RemoteHost);
         Assert.Equal(Mac, result.MacAddress);
+    }
+
+    [Fact]
+    public async Task GetDeviceFirmware_HappyPath_ParsesHid()
+    {
+        using var stub = new UdpDeviceStub("h", "n", statusHid: "362001065736+U-QCOM4004CV3.76.bin");
+
+        var result = await CreateService().GetDeviceFirmwareAsync(
+            new GetDeviceStatusRequest("127.0.0.1"), CancellationToken.None);
+
+        Assert.True(result.IsSuccess, result.Message);
+        Assert.Equal("362001065736+U-QCOM4004CV3.76.bin", result.Hid);
+        Assert.Equal("362001065736", result.FirmwareCode);
+        Assert.Equal("3.76", result.FirmwareVersion);
+        Assert.Equal(Mac, result.MacAddress);
+    }
+
+    [Fact]
+    public async Task GetDeviceFirmware_DeviceReportsNoHid_Fails()
+    {
+        using var stub = new UdpDeviceStub("h", "n", statusHid: "");
+
+        var result = await CreateService().GetDeviceFirmwareAsync(
+            new GetDeviceStatusRequest("127.0.0.1"), CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
     }
 
     [Fact]

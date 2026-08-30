@@ -16,8 +16,12 @@ namespace GreeACLocalServer.Api.Services;
 /// Device manager service with SignalR support for UI notifications.
 /// Inherits core functionality from HeadlessDeviceManagerService and adds real-time updates.
 /// </summary>
-public class DeviceManagerService(IHubContext<DeviceHub> hubContext, IDnsResolverService dnsResolver)
-    : HeadlessDeviceManagerService(dnsResolver)
+public class DeviceManagerService(
+    IHubContext<DeviceHub> hubContext,
+    IDnsResolverService dnsResolver,
+    GreeACLocalServer.Device.Interfaces.IDeviceControllerService deviceController,
+    IFirmwareUpdateService? firmwareUpdateService = null)
+    : HeadlessDeviceManagerService(dnsResolver, deviceController, firmwareUpdateService)
 {
     private readonly IHubContext<DeviceHub> _hub = hubContext;
 
@@ -28,7 +32,7 @@ public class DeviceManagerService(IHubContext<DeviceHub> hubContext, IDnsResolve
     protected override async Task OnDeviceUpdatedAsync(AcDeviceState deviceState)
     {
         // Send SignalR notification for device upsert
-        var dto = ToDto(deviceState);
+        var dto = await ProjectAsync(deviceState);
         await _hub.Clients.All.SendAsync(DeviceHubMethods.DeviceUpserted, dto);
     }
 
