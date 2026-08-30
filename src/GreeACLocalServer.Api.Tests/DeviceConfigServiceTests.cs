@@ -11,9 +11,9 @@ using Moq;
 namespace GreeACLocalServer.Api.Tests;
 
 /// <summary>
-/// Guards WP-06 finding F12: every device-config operation (query included) must be
-/// gated behind <see cref="ServerOptions.EnableManagement"/>, since all of them poke
-/// the device over UDP.
+/// Device management gating: the write operations (set name / set remote host) are gated
+/// behind <see cref="ServerOptions.EnableManagement"/>; the read-only status query stays
+/// available regardless so a device's configuration can always be inspected.
 /// </summary>
 public class DeviceConfigServiceTests
 {
@@ -27,15 +27,18 @@ public class DeviceConfigServiceTests
     }
 
     [Fact]
-    public async Task QueryDeviceStatusAsync_ManagementDisabled_RejectsWithoutTouchingDevice()
+    public async Task QueryDeviceStatusAsync_ManagementDisabled_StillQueriesTheDevice()
     {
         var sut = CreateSut(enableManagement: false);
+        _controller
+            .Setup(x => x.GetDeviceStatusAsync(It.IsAny<GetDeviceStatusRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new DeviceStatusResult(true, string.Empty, deviceName: "Nappali", remoteHost: "h", macAddress: "AABB"));
 
         var response = await sut.QueryDeviceStatusAsync(new QueryDeviceStatusRequest { IpAddress = "192.168.1.10" });
 
-        Assert.False(response.Success);
-        Assert.Equal("MANAGEMENT_DISABLED", response.ErrorCode);
-        _controller.Verify(x => x.GetDeviceStatusAsync(It.IsAny<GetDeviceStatusRequest>(), It.IsAny<CancellationToken>()), Times.Never);
+        Assert.True(response.Success);
+        Assert.Equal("Nappali", response.DeviceName);
+        _controller.Verify(x => x.GetDeviceStatusAsync(It.IsAny<GetDeviceStatusRequest>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]

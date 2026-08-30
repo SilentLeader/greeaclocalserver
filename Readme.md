@@ -372,8 +372,8 @@ The application is configured via `appsettings.json`. Here are the key settings:
   - `true` - Device configuration features enabled (default)
   - `false` - Device management operations disabled
 - **Affects**:
-  - **API Endpoints**: *All* `/device-config/*` operations (`status`, `set-name`, `set-remote-host`) return an error when disabled — every one of them contacts the device over UDP, so they are gated the same way
-  - **Web UI**: Set Device Name / Set Remote Host sections are hidden when disabled; the Query Status form stays visible but reports "management is disabled" if used
+  - **API Endpoints**: `/device-config/set-name` and `/device-config/set-remote-host` return an error when disabled. `/device-config/status` (read-only query) stays available regardless — you can always inspect a device's configuration
+  - **Web UI**: the Set Device Name / Set Remote Host sections are hidden when disabled; the Query Status form stays available
 - **Use Cases**: 
   - Set to `false` for read-only deployments or security-conscious environments
   - Set to `true` when device configuration changes are needed
@@ -575,7 +575,7 @@ The server exposes RESTful API endpoints for programmatic access:
   online/offline threshold shown in the web UI.
 
 ### **Device Configuration API**
-- **POST `/api/device-config/status`** - Query device status (requires `EnableManagement: true`)
+- **POST `/api/device-config/status`** - Query device status (always available)
 - **POST `/api/device-config/set-name`** - Set device name (requires `EnableManagement: true`)
 - **POST `/api/device-config/set-remote-host`** - Configure remote host (requires `EnableManagement: true`)
 
@@ -597,8 +597,8 @@ The server exposes RESTful API endpoints for programmatic access:
   }
   ```
 
-**Note**: `/device-config/*` endpoints (status included) return HTTP 200 with an error body
-(`errorCode: "MANAGEMENT_DISABLED"`) when `EnableManagement` is disabled.
+**Note**: The `set-name` / `set-remote-host` endpoints return HTTP 200 with an error body
+(`errorCode: "MANAGEMENT_DISABLED"`) when `EnableManagement` is disabled. `status` is not gated.
 
 ## �🔧 **Troubleshooting**
 
@@ -727,7 +727,7 @@ The following environment variables can be used to configure the container:
 | `GreeServer__ServerOptions__AllowLegacyTlsProtocols` | `true` | Accept SSL3/TLS1.0/1.1 on the 1813 listener; `false` = TLS1.2+ only |
 | `GreeServer__ServerOptions__IdleTimeoutSeconds` | `180` | Drop a device connection after N seconds of silence |
 | `GreeServer__ServerOptions__MaxConcurrentConnections` | `200` | Cap on concurrent device connections |
-| `Server__EnableManagement` | `true` | Enable the `/device-config/*` endpoints and UI |
+| `Server__EnableManagement` | `true` | Allow device-config **writes** (set name / set remote host); status query is always allowed |
 | `DeviceManager__DeviceTimeoutMinutes` | `60` | Device online/offline display threshold (minutes) |
 
 ### **Docker Compose**
