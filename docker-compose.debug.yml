@@ -1,0 +1,37 @@
+# Backend debug container: run the Api under the SDK image with vsdbg baked in,
+# then attach from VS Code with the "Docker: Attach to backend" launch config.
+#   docker compose -f docker-compose.debug.yml up -d --build
+services:
+  gree-ac-server-debug:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: debug
+    container_name: gree-ac-local-server-debug
+    # keep STDIN open so `docker exec -i` (the debugger pipe) works
+    stdin_open: true
+    tty: true
+    ports:
+      - "5000:5000" # GREE device TCP
+      - "1813:1813" # GREE device TCP (TLS)
+      - "5100:5100" # Web UI (HTTP)
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - DOTNET_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:5100
+      - GreeServer__ServerOptions__DomainName=eu.dis.gree.com
+      - GreeServer__ServerOptions__ExternalIp=192.168.0.55
+      - GreeServer__ServerOptions__TLSEnabled=true
+      - GreeServer__EncryptionOptions__DefaultCryptoKey=a3K8Bx%2r8Y7#xDh
+      - GreeServer__EnableUI=true
+      - Serilog__MinimumLevel=Debug
+    volumes:
+      # live source so a rebuild/restart inside the container picks up edits
+      - ./src:/src
+      - ./logs:/app/logs
+    networks:
+      - gree-debug-network
+
+networks:
+  gree-debug-network:
+    driver: bridge

@@ -9,6 +9,37 @@
 			"problemMatcher": [
 				"$msCompile"
 			]
+		},
+		{
+			"type": "shell",
+			"label": "docker-debug-up",
+			"command": "docker compose -f docker-compose.debug.yml up -d --build",
+			"problemMatcher": [],
+			"presentation": {
+				"reveal": "always",
+				"panel": "shared"
+			}
+		},
+		{
+			"type": "shell",
+			"label": "docker-debug-down",
+			"command": "docker compose -f docker-compose.debug.yml down",
+			"problemMatcher": []
+		},
+		{
+			"type": "shell",
+			"label": "docker-debug-wait",
+			"detail": "Block until the backend in the debug container answers on :5100",
+			"command": "bash",
+			"args": [
+				"-c",
+				"for i in $(seq 1 120); do curl -sf http://localhost:5100/api/devices >/dev/null && exit 0; sleep 1; done; echo 'backend did not become ready on :5100' >&2; exit 1"
+			],
+			"problemMatcher": [],
+			"presentation": {
+				"reveal": "silent",
+				"panel": "shared"
+			}
 		}
 	]
 }
