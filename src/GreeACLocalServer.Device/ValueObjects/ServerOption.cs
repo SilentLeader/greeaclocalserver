@@ -13,6 +13,11 @@ internal static class ServerOption
     /// </summary>
     public const int TLS_PORT = 1813;
 
+    /// <summary>
+    /// Alternate plaintext port used by some GREE firmware revisions instead of <see cref="PORT"/>.
+    /// </summary>
+    public const int ALT_PORT = 1812;
+
     public const int ReceiveTimeout = 300000;
 
     /// <summary>

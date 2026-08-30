@@ -86,17 +86,20 @@ internal class MessageHandlerService(ICryptoService cryptoService, IOptionsMonit
         ArgumentException.ThrowIfNullOrWhiteSpace(options.DomainName);
         ArgumentException.ThrowIfNullOrWhiteSpace(options.ExternalIp);
 
+        var plainPort = options.TcpPorts.Count > 0 ? options.TcpPorts[0] : ServerOption.PORT;
+        var advertisedPort = isTLS ? options.TlsPort : plainPort;
+
         var discoverResponse = new DiscoverResponse
         {
             ServerHost = options.DomainName,
-            ServerPort = isTLS ? ServerOption.TLS_PORT : ServerOption.PORT,
+            ServerPort = advertisedPort,
             HostOrIpAddress = options.ExternalIp,
             Ip = options.ExternalIp,
             SecondaryIp = options.ExternalIp,
             Protocol = isTLS ? "" : "TCP",
             ResponseType = ResponseType.Server,
-            TcpPort = isTLS ? ServerOption.TLS_PORT : ServerOption.PORT,
-            UdpPort = isTLS ? ServerOption.TLS_PORT : ServerOption.PORT
+            TcpPort = advertisedPort,
+            UdpPort = advertisedPort
         };
 
         var rawPackData = JsonSerializer.Serialize(discoverResponse, _jsonSerializerOptions);

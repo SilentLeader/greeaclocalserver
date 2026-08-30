@@ -29,6 +29,8 @@ internal class SocketHandlerService(
     private readonly object _lifecycleLock = new();
     private volatile bool _isRunning;
     private X509Certificate2? _tlsCertificate;
+    private int _tlsPort = ServerOption.TLS_PORT;
+    private List<int> _plainPorts = [ServerOption.PORT];
     private SemaphoreSlim? _connectionLimiter;
 
     private readonly IMessageHandlerService _greeHandler = greeHandler;
@@ -81,23 +83,25 @@ internal class SocketHandlerService(
                 _logger.LogDebug("GREE device TLS listener certificate loaded. (Common name: {Subject})", _tlsCertificate.Subject);
             }
 
-            if (_serverOptions.ListenIPAddresses.Any())
+            _plainPorts = _serverOptions.TcpPorts.Count > 0
+                ? _serverOptions.TcpPorts.Distinct().ToList()
+                : [ServerOption.PORT];
+            _tlsPort = _serverOptions.TlsPort;
+            var plainPorts = _plainPorts;
+
+            var listenAddresses = _serverOptions.ListenIPAddresses.Any()
+                ? _serverOptions.ListenIPAddresses.Select(IPAddress.Parse).ToList()
+                : [IPAddress.Any];
+
+            foreach (var address in listenAddresses)
             {
-                foreach (var ip in _serverOptions.ListenIPAddresses)
+                foreach (var port in plainPorts)
                 {
-                    _servers.Add(new TcpListener(IPAddress.Parse(ip), ServerOption.PORT));
-                    if (_serverOptions.TLSEnabled)
-                    {
-                        _servers.Add(new TcpListener(IPAddress.Parse(ip), ServerOption.TLS_PORT));
-                    }
+                    _servers.Add(new TcpListener(address, port));
                 }
-            }
-            else
-            {
-                _servers.Add(new TcpListener(IPAddress.Any, ServerOption.PORT));
                 if (_serverOptions.TLSEnabled)
                 {
-                    _servers.Add(new TcpListener(IPAddress.Any, ServerOption.TLS_PORT));
+                    _servers.Add(new TcpListener(address, _tlsPort));
                 }
             }
 
@@ -130,10 +134,10 @@ internal class SocketHandlerService(
         _logger.LogInformation("Gree AC server started");
         _logger.LogInformation("Domainname for AC Devices: {DomainName}", _serverOptions.DomainName);
         _logger.LogInformation("IP Address for AC Devices: {ExternalIp}", _serverOptions.ExternalIp);
-        _logger.LogInformation("Port for AC Devices: {PORT}", ServerOption.PORT);
+        _logger.LogInformation("Port(s) for AC Devices: {PORT}", string.Join(", ", _plainPorts));
         if (_serverOptions.TLSEnabled)
         {
-            _logger.LogInformation("TLS Port for AC Devices: {TLS_PORT}", ServerOption.TLS_PORT);
+            _logger.LogInformation("TLS Port for AC Devices: {TLS_PORT}", _tlsPort);
             _logger.LogInformation(
                 "TLS protocols: {Protocols}",
                 _serverOptions.AllowLegacyTlsProtocols ? "legacy (SSL3-TLS1.3)" : "TLS1.2+");
@@ -196,7 +200,9 @@ internal class SocketHandlerService(
                     newClient.Dispose();
                     continue;
                 }
-                var isTls = server.LocalEndpoint is IPEndPoint { Port: ServerOption.TLS_PORT };
+                var isTls = _serverOptions.TLSEnabled
+                    && server.LocalEndpoint is IPEndPoint endpoint
+                    && endpoint.Port == _tlsPort;
 
                 var limiter = _connectionLimiter;
                 if (limiter is not null && !await limiter.WaitAsync(TimeSpan.Zero, _cancellationToken))
