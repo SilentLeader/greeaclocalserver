@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 using MudBlazor;
 using GreeACLocalServer.Shared.Interfaces;
+using GreeACLocalServer.UI.Services;
 
 namespace GreeACLocalServer.UI.Pages;
 
@@ -16,9 +17,13 @@ public partial class WifiConfig(
     private bool _showPassword = false;
     private string _osDetectionMessage = string.Empty;
 
+    private const string DeviceApGateway = WifiCommandBuilder.DeviceApGateway;
+
     private bool IsFormValid =>
         !string.IsNullOrWhiteSpace(_wifiSsid) &&
-        !string.IsNullOrWhiteSpace(_wifiPassword);
+        !string.IsNullOrWhiteSpace(_wifiPassword) &&
+        !WifiCommandBuilder.ContainsControlCharacters(_wifiSsid) &&
+        !WifiCommandBuilder.ContainsControlCharacters(_wifiPassword);
 
 
     protected override async Task OnInitializedAsync()
@@ -61,31 +66,7 @@ public partial class WifiConfig(
             return string.Empty;
         }
 
-        var escapedPassword = EscapeJsonString(_wifiPassword);
-        var escapedSsid = EscapeJsonString(_wifiSsid);
-        var jsonPayload = $"{{\\\"psw\\\": \"{escapedPassword}\",\\\"ssid\\\": \"{escapedSsid}\",\\\"t\\\": \"wlan\"}}";
-
-        return _selectedOs switch
-        {
-            "linux" => $"echo -n \"{jsonPayload}\" | nc -cu 192.168.1.1 7000",
-            "macos" => $"echo -n \"{jsonPayload}\" | nc -cu 192.168.1.1 7000",
-            "windows-wsl" => $"echo -n \"{jsonPayload}\" | nc -cu 192.168.1.1 7000",
-            "windows-powershell" => GetPowerShellCommand(jsonPayload),
-            "windows-ncat" => $"echo {jsonPayload} | ncat -u 192.168.1.1 7000",
-            _ => $"echo -n \"{jsonPayload}\" | nc -cu 192.168.1.1 7000"
-        };
-    }
-
-    private string GetPowerShellCommand(string jsonPayload)
-    {
-        // PowerShell UDP command using .NET classes - remove extra escaping for PowerShell
-        var cleanPayload = jsonPayload.Replace("\\\"", "\"");
-        return $"$bytes = [System.Text.Encoding]::UTF8.GetBytes('{cleanPayload}'); $client = New-Object System.Net.Sockets.UdpClient; $client.Connect('192.168.1.1', 7000); $client.Send($bytes, $bytes.Length); $client.Close()";
-    }
-
-    private string EscapeJsonString(string input)
-    {
-        return input.Replace("\\", "\\\\").Replace("\"", "\\\"");
+        return WifiCommandBuilder.Build(_selectedOs, _wifiSsid, _wifiPassword);
     }
 
     private async Task CopyToClipboard()

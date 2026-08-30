@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\GreeACLocalServer.Api\GreeACLocalServer.Api.csproj" />
+    <ProjectReference Include="..\GreeACLocalServer.UI\GreeACLocalServer.UI.csproj" />
   </ItemGroup>
 
 </Project>
