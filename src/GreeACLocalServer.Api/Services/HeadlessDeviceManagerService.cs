@@ -32,47 +32,25 @@ public class HeadlessDeviceManagerService(
                 DNSName = dnsName,
                 LastConnectionTime = DateTime.UtcNow
             },
-            (key, existing) =>
+            (key, existing) => existing with
             {
-                existing.IpAddress = ipAddress;
-                existing.DNSName = dnsName;
-                existing.LastConnectionTime = DateTime.UtcNow;
-                return existing;
+                IpAddress = ipAddress,
+                DNSName = dnsName,
+                LastConnectionTime = DateTime.UtcNow
             });
 
         // Virtual method hook for derived classes (e.g., SignalR notifications)
         await OnDeviceUpdatedAsync(state);
     }
 
-    public virtual async Task RemoveStaleDevicesAsync()
-    {
-        var threshold = DateTime.UtcNow.AddMinutes(-_options.CurrentValue.DeviceTimeoutMinutes);
-        var removed = new List<string>();
-        foreach (var kvp in _deviceStates)
-        {
-            if (kvp.Value.LastConnectionTime < threshold)
-            {
-                if (_deviceStates.TryRemove(kvp.Key, out _))
-                {
-                    removed.Add(kvp.Key);
-                }
-            }
-        }
-
-        // Virtual method hook for derived classes (e.g., SignalR notifications)
-        await OnDevicesRemovedAsync(removed);
-    }
-
     public virtual Task<IEnumerable<DeviceDto>> GetAllDeviceStatesAsync(CancellationToken cancellationToken = default)
     {
-        // Remove automatic stale device removal
         IEnumerable<DeviceDto> result = _deviceStates.Values.Select(v => new DeviceDto(v.MacAddress, v.IpAddress, v.DNSName, v.LastConnectionTime));
         return Task.FromResult(result);
     }
 
     public virtual Task<DeviceDto?> GetAsync(string macAddress, CancellationToken cancellationToken = default)
     {
-        // Remove automatic stale device removal
         if (_deviceStates.TryGetValue(macAddress, out var state))
         {
             DeviceDto dto = new DeviceDto(state.MacAddress, state.IpAddress, state.DNSName, state.LastConnectionTime);

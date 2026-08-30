@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Options;
@@ -105,42 +106,59 @@ public class HeadlessDeviceManagerServiceTests
     }
 
     [Fact]
-    public async Task RemoveStaleDevicesAsync_WithExpiredDevices_RemovesDevices()
+    public async Task UpdateOrAddAsync_CalledTwiceForSameMac_KeepsSingleUpdatedEntry()
     {
         // Arrange
-        _deviceManagerOptions.DeviceTimeoutMinutes = 0; // Immediate timeout for testing
         var macAddress = "AA:BB:CC:DD:EE:FF";
-        var ipAddress = "192.168.1.100";
-
-        await _deviceManagerService.UpdateOrAddAsync(macAddress, ipAddress);
-
-        // Wait a bit to ensure timeout
-        await Task.Delay(100);
 
         // Act
-        await _deviceManagerService.RemoveStaleDevicesAsync();
+        await _deviceManagerService.UpdateOrAddAsync(macAddress, "192.168.1.100");
+        var firstSeen = (await _deviceManagerService.GetAsync(macAddress))!.LastConnectionTimeUtc;
+        await Task.Delay(10);
+        await _deviceManagerService.UpdateOrAddAsync(macAddress, "192.168.1.101");
 
         // Assert
-        var device = await _deviceManagerService.GetAsync(macAddress);
-        Assert.Null(device);
+        var devices = (await _deviceManagerService.GetAllDeviceStatesAsync()).ToList();
+        Assert.Single(devices);
+        Assert.Equal("192.168.1.101", devices[0].IpAddress);
+        Assert.True(devices[0].LastConnectionTimeUtc >= firstSeen);
     }
 
     [Fact]
-    public async Task RemoveStaleDevicesAsync_WithRecentDevices_DoesNotRemoveDevices()
+    public async Task UpdateOrAddAsync_DoesNotMutateSnapshotObservedByReaders()
     {
         // Arrange
-        _deviceManagerOptions.DeviceTimeoutMinutes = 60; // Long timeout
         var macAddress = "AA:BB:CC:DD:EE:FF";
-        var ipAddress = "192.168.1.100";
+        await _deviceManagerService.UpdateOrAddAsync(macAddress, "192.168.1.100");
+        var snapshot = await _deviceManagerService.GetAsync(macAddress);
 
-        await _deviceManagerService.UpdateOrAddAsync(macAddress, ipAddress);
-
-        // Act
-        await _deviceManagerService.RemoveStaleDevicesAsync();
+        // Act - a later update must not retroactively change an earlier snapshot
+        await _deviceManagerService.UpdateOrAddAsync(macAddress, "192.168.1.200");
 
         // Assert
-        var device = await _deviceManagerService.GetAsync(macAddress);
-        Assert.NotNull(device);
+        Assert.Equal("192.168.1.100", snapshot!.IpAddress);
+    }
+
+    [Fact]
+    public async Task UpdateOrAddAsync_ConcurrentWithReads_IsConsistent()
+    {
+        // Arrange
+        var tasks = new List<Task>();
+
+        // Act
+        for (var i = 0; i < 100; i++)
+        {
+            var mac = $"AA:BB:CC:DD:EE:{i:X2}";
+            var ip = $"192.168.1.{i}";
+            tasks.Add(Task.Run(() => _deviceManagerService.UpdateOrAddAsync(mac, ip)));
+            tasks.Add(Task.Run(() => _deviceManagerService.GetAllDeviceStatesAsync()));
+        }
+
+        // Assert - no exception, all writes land exactly once
+        await Task.WhenAll(tasks);
+        var devices = (await _deviceManagerService.GetAllDeviceStatesAsync()).ToList();
+        Assert.Equal(100, devices.Count);
+        Assert.Equal(100, devices.Select(d => d.MacAddress).Distinct().Count());
     }
 
     [Fact]
