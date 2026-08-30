@@ -16,6 +16,18 @@ namespace GreeACLocalServer.Api.Models
         /// by port. Never expires; entries are only dropped when the device is removed.
         /// </summary>
         public IReadOnlyList<DeviceEndpoint> Endpoints { get; init; } = [];
+
+        /// <summary>Raw <c>hid</c> firmware identifier last reported by the device.</summary>
+        public string? FirmwareHid { get; init; }
+
+        /// <summary>Parsed firmware version (e.g. <c>3.76</c>), when the <c>hid</c> was parseable.</summary>
+        public string? FirmwareVersion { get; init; }
+
+        /// <summary>Parsed firmware code used for update lookups.</summary>
+        public string? FirmwareCode { get; init; }
+
+        /// <summary>When the firmware identifier was last successfully queried from the device.</summary>
+        public DateTime? FirmwareCheckedUtc { get; init; }
     }
 
     /// <summary>A single observed (port, TLS) connection endpoint with its last-seen time.</summary>

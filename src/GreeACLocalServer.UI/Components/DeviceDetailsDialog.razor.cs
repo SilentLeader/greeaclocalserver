@@ -1,4 +1,5 @@
 using GreeACLocalServer.Shared.Contracts;
+using GreeACLocalServer.Shared.Interfaces;
 using GreeACLocalServer.UI.Helpers;
 using Microsoft.AspNetCore.Components;
 using MudBlazor;
@@ -8,6 +9,12 @@ namespace GreeACLocalServer.UI.Components;
 public partial class DeviceDetailsDialog : ComponentBase, IDisposable
 {
     [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Inject] private IDeviceManagerService DeviceManager { get; set; } = default!;
+
+    [Inject] private ISnackbar Snackbar { get; set; } = default!;
+
+    private bool _refreshingFirmware;
 
     [Parameter] public DeviceDto Device { get; set; } = default!;
 
@@ -67,6 +74,39 @@ public partial class DeviceDetailsDialog : ComponentBase, IDisposable
         }
 
         return "Just now";
+    }
+
+    private async Task RefreshFirmware()
+    {
+        if (_refreshingFirmware || Device is null)
+        {
+            return;
+        }
+
+        _refreshingFirmware = true;
+        StateHasChanged();
+        try
+        {
+            var updated = await DeviceManager.RefreshFirmwareAsync(Device.MacAddress);
+            if (updated is not null)
+            {
+                Device = updated;
+                Snackbar.Add("Firmware information refreshed", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("Could not read firmware from the device", Severity.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Firmware refresh failed: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _refreshingFirmware = false;
+            StateHasChanged();
+        }
     }
 
     private void Cancel()
