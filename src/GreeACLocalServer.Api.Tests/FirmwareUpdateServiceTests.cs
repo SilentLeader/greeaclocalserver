@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using GreeACLocalServer.Api.Options;
@@ -34,16 +35,58 @@ public class FirmwareUpdateServiceTests
         public HttpClient CreateClient(string name) => new(handler, disposeHandler: false);
     }
 
-    private static FirmwareUpdateService Create(HttpMessageHandler handler, FirmwareUpdateOptions options) =>
+    private static FirmwareUpdateService Create(HttpMessageHandler handler, FirmwareUpdateOptions options, ILogger<FirmwareUpdateService>? logger = null) =>
         new(new SingleClientFactory(handler),
             new StaticOptionsMonitor<FirmwareUpdateOptions>(options),
-            NullLogger<FirmwareUpdateService>.Instance);
+            logger ?? NullLogger<FirmwareUpdateService>.Instance);
 
     private sealed class StaticOptionsMonitor<T>(T value) : IOptionsMonitor<T>
     {
-        public T CurrentValue { get; } = value;
-        public T Get(string? name) => CurrentValue;
+        public T Value { get; set; } = value;
+        public T CurrentValue => Value;
+        public T Get(string? name) => Value;
         public IDisposable? OnChange(Action<T, string?> listener) => null;
+    }
+
+    private sealed class CountingLogger<T> : ILogger<T>
+    {
+        public int InformationCount { get; private set; }
+        public IDisposable BeginScope<TState>(TState state) where TState : notnull => NullScope.Instance;
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            if (logLevel == LogLevel.Information)
+            {
+                InformationCount++;
+            }
+        }
+
+        private sealed class NullScope : IDisposable
+        {
+            public static readonly NullScope Instance = new();
+            public void Dispose() { }
+        }
+    }
+
+    [Fact]
+    public async Task CheckAsync_CloudCheck_ReLogsAfterDisableThenReEnable()
+    {
+        var handler = new StubHandler("{\"ver\":\"3.77\"}");
+        var monitor = new StaticOptionsMonitor<FirmwareUpdateOptions>(new FirmwareUpdateOptions { Enabled = true });
+        var logger = new CountingLogger<FirmwareUpdateService>();
+        var service = new FirmwareUpdateService(new SingleClientFactory(handler), monitor, logger);
+
+        await service.CheckAsync("362001065736", "3.76");
+        await service.CheckAsync("362001065736", "3.76");
+        Assert.Equal(1, logger.InformationCount);
+
+        monitor.Value = new FirmwareUpdateOptions { Enabled = false };
+        await service.CheckAsync("362001065736", "3.76");
+        Assert.Equal(1, logger.InformationCount);
+
+        monitor.Value = new FirmwareUpdateOptions { Enabled = true };
+        await service.CheckAsync("362001065736", "3.76");
+        Assert.Equal(2, logger.InformationCount);
     }
 
     [Fact]

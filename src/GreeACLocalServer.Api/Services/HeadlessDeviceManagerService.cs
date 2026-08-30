@@ -112,8 +112,13 @@ public class HeadlessDeviceManagerService(
             return null;
         }
 
+        // Project first (allowRemoteFetch: true) so the cloud lookup result is in
+        // the cache before the SignalR push: the push re-projects cache-only, and
+        // other UI clients then see the fresh UpdateAvailable in the same round
+        // rather than one cycle later.
+        var dto = await ProjectAsync(updated, allowRemoteFetch: true, cancellationToken);
         await OnDeviceUpdatedAsync(updated);
-        return await ProjectAsync(updated, allowRemoteFetch: true, cancellationToken);
+        return dto;
     }
 
     /// <summary>

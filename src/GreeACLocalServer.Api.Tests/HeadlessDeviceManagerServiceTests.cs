@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Options;
 using Moq;
 using GreeACLocalServer.Api.Interfaces;
+using GreeACLocalServer.Api.Models;
 using GreeACLocalServer.Api.Options;
 using GreeACLocalServer.Api.Services;
 using GreeACLocalServer.Device.Interfaces;
@@ -437,6 +438,54 @@ public class HeadlessDeviceManagerServiceTests
         firmware.Verify(
             x => x.CheckAsync(It.IsAny<string>(), It.IsAny<string>(), false, It.IsAny<CancellationToken>()),
             Times.AtLeastOnce);
+    }
+
+    private sealed class OrderRecordingManager(
+        Mock<IDnsResolverService> dns,
+        Mock<IDeviceControllerService> controller,
+        RecordingFirmwareService firmware)
+        : HeadlessDeviceManagerService(dns.Object, controller.Object, firmware,
+            new OptionsMonitorStub<FirmwareUpdateOptions>(new FirmwareUpdateOptions { AutoQuery = false, Enabled = true }))
+    {
+        private readonly RecordingFirmwareService _firmware = firmware;
+
+        /// <summary>CheckAsync call count observed at each device-updated push.</summary>
+        public List<int> ChecksBeforeEachPush { get; } = [];
+
+        protected override Task OnDeviceUpdatedAsync(AcDeviceState deviceState)
+        {
+            ChecksBeforeEachPush.Add(_firmware.Calls.Count);
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class RecordingFirmwareService : IFirmwareUpdateService
+    {
+        public List<bool> Calls { get; } = [];
+
+        public Task<FirmwareUpdateInfo?> CheckAsync(string firmwareCode, string currentVersion, bool allowRemoteFetch = true, CancellationToken cancellationToken = default)
+        {
+            Calls.Add(allowRemoteFetch);
+            return Task.FromResult<FirmwareUpdateInfo?>(new FirmwareUpdateInfo("9.9", true, false));
+        }
+    }
+
+    [Fact]
+    public async Task RefreshFirmwareAsync_WarmsCloudCacheBeforeThePush()
+    {
+        var firmware = new RecordingFirmwareService();
+        var manager = new OrderRecordingManager(_mockDnsResolver, _mockDeviceController, firmware);
+        SetupFirmware(new DeviceFirmwareResult(true, "", hid: "362001065736+U-QCOM4004CV3.76.bin",
+            firmwareVersion: "3.76", firmwareCode: "362001065736", macAddress: "AA:BB:CC:DD:EE:FF"));
+
+        await manager.UpdateOrAddAsync("AA:BB:CC:DD:EE:FF", "192.168.1.100");
+        var dto = await manager.RefreshFirmwareAsync("AA:BB:CC:DD:EE:FF");
+
+        // The remote (allowRemoteFetch: true) lookup ran first...
+        Assert.True(firmware.Calls[0]);
+        // ...and by the time the refresh's push fired, that lookup was already done.
+        Assert.Equal(1, manager.ChecksBeforeEachPush[^1]);
+        Assert.True(dto!.UpdateAvailable);
     }
 
     [Fact]

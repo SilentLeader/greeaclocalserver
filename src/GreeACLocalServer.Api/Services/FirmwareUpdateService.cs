@@ -31,11 +31,22 @@ public class FirmwareUpdateService(
     private readonly IOptionsMonitor<FirmwareUpdateOptions> _options = options;
     private readonly ILogger<FirmwareUpdateService> _logger = logger;
 
-    private int _startupLogged;
+    private int _enabledLogged;
 
-    private void LogStartupOnce(FirmwareUpdateOptions opts)
+    /// <summary>
+    /// Logs once each time the cloud check transitions into the enabled state
+    /// (including after an <c>off → on</c> config reload), and re-arms when it is
+    /// disabled again.
+    /// </summary>
+    private void LogCloudCheckState(FirmwareUpdateOptions opts)
     {
-        if (opts.Enabled && Interlocked.Exchange(ref _startupLogged, 1) == 0)
+        if (!opts.Enabled)
+        {
+            Interlocked.Exchange(ref _enabledLogged, 0);
+            return;
+        }
+
+        if (Interlocked.Exchange(ref _enabledLogged, 1) == 0)
         {
             _logger.LogInformation(
                 "Firmware cloud update check is ENABLED: firmware codes will be sent to {BaseUrl}",
@@ -46,7 +57,7 @@ public class FirmwareUpdateService(
     public async Task<FirmwareUpdateInfo?> CheckAsync(string firmwareCode, string currentVersion, bool allowRemoteFetch = true, CancellationToken cancellationToken = default)
     {
         var opts = _options.CurrentValue;
-        LogStartupOnce(opts);
+        LogCloudCheckState(opts);
         if (!opts.Enabled || string.IsNullOrWhiteSpace(firmwareCode))
         {
             return null;
