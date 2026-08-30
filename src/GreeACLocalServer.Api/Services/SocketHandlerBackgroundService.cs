@@ -55,7 +55,7 @@ public class SocketHandlerBackgroundService(
             {
                 try
                 {
-                    await deviceManagerService.UpdateOrAddAsync(msg.MacAddress, msg.IPAddress);
+                    await deviceManagerService.UpdateOrAddAsync(msg.MacAddress, msg.IPAddress, msg.Port, msg.IsTls);
                 }
                 catch (Exception ex)
                 {

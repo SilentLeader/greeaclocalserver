@@ -28,7 +28,7 @@ public class DeviceManagerService(IHubContext<DeviceHub> hubContext, IDnsResolve
     protected override async Task OnDeviceUpdatedAsync(AcDeviceState deviceState)
     {
         // Send SignalR notification for device upsert
-        var dto = new DeviceDto(deviceState.MacAddress, deviceState.IpAddress, deviceState.DNSName, deviceState.LastConnectionTime);
+        var dto = ToDto(deviceState);
         await _hub.Clients.All.SendAsync(DeviceHubMethods.DeviceUpserted, dto);
     }
 

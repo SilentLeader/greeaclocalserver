@@ -47,7 +47,28 @@ public class SocketHandlerBackgroundServiceTests
         _eventHandler.RaiseDeviceConnected(new DeviceConnectedMessage { MacAddress = "mac", IPAddress = "ip" });
 
         await WaitForAsync(() => _deviceManager.Invocations.Count > 0);
-        _deviceManager.Verify(x => x.UpdateOrAddAsync("mac", "ip"), Times.Once);
+        _deviceManager.Verify(x => x.UpdateOrAddAsync("mac", "ip", 0, false), Times.Once);
+
+        await service.StopAsync(CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task DeviceConnectedEvent_PropagatesPortAndTlsFlag()
+    {
+        var service = CreateService();
+
+        await service.StartAsync(CancellationToken.None);
+        await service.Subscribed;
+        _eventHandler.RaiseDeviceConnected(new DeviceConnectedMessage
+        {
+            MacAddress = "mac",
+            IPAddress = "ip",
+            Port = 1813,
+            IsTls = true
+        });
+
+        await WaitForAsync(() => _deviceManager.Invocations.Count > 0);
+        _deviceManager.Verify(x => x.UpdateOrAddAsync("mac", "ip", 1813, true), Times.Once);
 
         await service.StopAsync(CancellationToken.None);
     }

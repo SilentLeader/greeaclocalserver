@@ -186,6 +186,60 @@ public class HeadlessDeviceManagerServiceTests
     }
 
     [Fact]
+    public async Task UpdateOrAddAsync_RecordsConnectionEndpoint()
+    {
+        var mac = "AA:BB:CC:DD:EE:FF";
+
+        await _deviceManagerService.UpdateOrAddAsync(mac, "192.168.1.100", port: 5000, isTls: false);
+
+        var device = await _deviceManagerService.GetAsync(mac);
+        var endpoint = Assert.Single(device!.Endpoints);
+        Assert.Equal(5000, endpoint.Port);
+        Assert.False(endpoint.IsTls);
+    }
+
+    [Fact]
+    public async Task UpdateOrAddAsync_SamePortAndTls_RefreshesSingleEndpoint()
+    {
+        var mac = "AA:BB:CC:DD:EE:FF";
+
+        await _deviceManagerService.UpdateOrAddAsync(mac, "192.168.1.100", port: 5000, isTls: false);
+        var firstSeen = (await _deviceManagerService.GetAsync(mac))!.Endpoints[0].LastSeenUtc;
+        await Task.Delay(10);
+        await _deviceManagerService.UpdateOrAddAsync(mac, "192.168.1.100", port: 5000, isTls: false);
+
+        var device = await _deviceManagerService.GetAsync(mac);
+        var endpoint = Assert.Single(device!.Endpoints);
+        Assert.True(endpoint.LastSeenUtc >= firstSeen);
+    }
+
+    [Fact]
+    public async Task UpdateOrAddAsync_DistinctPortsAndProtocols_AreTrackedSeparatelyAndOrdered()
+    {
+        var mac = "AA:BB:CC:DD:EE:FF";
+
+        await _deviceManagerService.UpdateOrAddAsync(mac, "192.168.1.100", port: 1813, isTls: true);
+        await _deviceManagerService.UpdateOrAddAsync(mac, "192.168.1.100", port: 5000, isTls: false);
+        await _deviceManagerService.UpdateOrAddAsync(mac, "192.168.1.100", port: 1812, isTls: false);
+
+        var device = await _deviceManagerService.GetAsync(mac);
+        Assert.Equal(
+            new[] { (1812, false), (1813, true), (5000, false) },
+            device!.Endpoints.Select(e => (e.Port, e.IsTls)));
+    }
+
+    [Fact]
+    public async Task UpdateOrAddAsync_WithUnknownPort_RecordsNoEndpoint()
+    {
+        var mac = "AA:BB:CC:DD:EE:FF";
+
+        await _deviceManagerService.UpdateOrAddAsync(mac, "192.168.1.100", port: 0, isTls: false);
+
+        var device = await _deviceManagerService.GetAsync(mac);
+        Assert.Empty(device!.Endpoints);
+    }
+
+    [Fact]
     public void Constructor_WithNullDnsResolver_DoesNotThrowImmediately()
     {
         // Arrange, Act & Assert - Null DNS resolver doesn't fail immediately in constructor

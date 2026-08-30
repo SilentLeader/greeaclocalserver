@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net.Sockets;
 using System.Text;
 using GreeACLocalServer.Device.Interfaces;
@@ -32,6 +33,18 @@ public class SocketHandlerServiceTests
     private sealed class NoopEventPublisher : IDeviceEventPublisher
     {
         public void DeviceConnected(DeviceConnectedMessage message) { }
+    }
+
+    private sealed class CapturingEventPublisher : IDeviceEventPublisher
+    {
+        public ConcurrentQueue<DeviceConnectedMessage> Messages { get; } = new();
+        public void DeviceConnected(DeviceConnectedMessage message) => Messages.Enqueue(message);
+    }
+
+    private sealed class MacReturningHandler : IMessageHandlerService
+    {
+        public GreeHandlerResponse GetResponse(string input, bool isTLS = false)
+            => new() { Data = "ok", KeepAlive = false, MacAddress = "abcdef123456" };
     }
 
     private sealed class StubCryptoService : ICryptoService
@@ -86,6 +99,42 @@ public class SocketHandlerServiceTests
 
             var response = await reader.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(5));
             Assert.Equal("pong", response);
+        }
+        finally
+        {
+            service.Stop();
+        }
+    }
+
+    [Fact]
+    public async Task DeviceConnectedMessage_CarriesPlainListenerPortAndProtocol()
+    {
+        var options = LoopbackOptions();
+        var publisher = new CapturingEventPublisher();
+        var service = new SocketHandlerService(
+            new MacReturningHandler(),
+            Options.Create(options),
+            publisher,
+            new StubCryptoService(),
+            NullLogger<SocketHandlerService>.Instance);
+
+        service.Start();
+        try
+        {
+            using var client = await ConnectAsync();
+            using var stream = client.GetStream();
+            using var writer = new StreamWriter(stream, new UTF8Encoding(false)) { AutoFlush = true, NewLine = "\n" };
+            await writer.WriteLineAsync("{\"t\":\"pack\"}");
+
+            var deadline = DateTime.UtcNow.AddSeconds(5);
+            while (publisher.Messages.IsEmpty && DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(20);
+            }
+
+            Assert.True(publisher.Messages.TryDequeue(out var message));
+            Assert.Equal(ServerOption.PORT, message!.Port);
+            Assert.False(message.IsTls);
         }
         finally
         {

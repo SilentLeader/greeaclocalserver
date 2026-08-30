@@ -42,6 +42,36 @@
                         (@GetTimeAgo())
                     </MudText>
                 </MudItem>
+
+                <MudItem xs="12">
+                    <MudText Typo="Typo.h6" GutterBottom="true" Class="mt-4">Connection Endpoints</MudText>
+                    <MudDivider Class="mb-3" />
+                    @if (Device.Endpoints is null || Device.Endpoints.Count == 0)
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">No endpoint data yet.</MudText>
+                    }
+                    else
+                    {
+                        <MudList T="DeviceEndpointDto" Dense="true">
+                            @foreach (var endpoint in Device.Endpoints)
+                            {
+                                <MudListItem T="DeviceEndpointDto">
+                                    <div class="d-flex align-center">
+                                        <MudTooltip Text="@(endpoint.IsTls ? "TLS encrypted (SSL/TLS)" : "Plaintext (no encryption)")">
+                                            <MudIcon Icon="@(endpoint.IsTls ? Icons.Material.Filled.Lock : Icons.Material.Filled.LockOpen)"
+                                                     Color="@(endpoint.IsTls ? Color.Success : Color.Warning)"
+                                                     Size="Size.Small" Class="mr-2" />
+                                        </MudTooltip>
+                                        <MudText Typo="Typo.body1">Port @endpoint.Port</MudText>
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="ml-2">
+                                            @(endpoint.IsTls ? "TLS" : "plaintext") · last seen @endpoint.LastSeenUtc.ToLocalTime().ToString("G")
+                                        </MudText>
+                                    </div>
+                                </MudListItem>
+                            }
+                        </MudList>
+                    }
+                </MudItem>
             </MudGrid>
         </MudContainer>
     </DialogContent>
