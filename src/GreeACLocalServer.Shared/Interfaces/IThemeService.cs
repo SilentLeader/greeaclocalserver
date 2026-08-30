@@ -2,7 +2,7 @@ using MudBlazor;
 
 namespace GreeACLocalServer.Shared.Interfaces;
 
-public interface IThemeService
+public interface IThemeService : IAsyncDisposable
 {
     bool IsDarkMode { get; }
     bool IsAutoMode { get; }
