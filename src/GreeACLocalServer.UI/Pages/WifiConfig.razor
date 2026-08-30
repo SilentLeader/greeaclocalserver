@@ -45,7 +45,12 @@
         <MudDivider Class="my-4" />
 
         <MudText Typo="Typo.h6" Class="mb-3">Generated Command:</MudText>
-        
+
+        <MudText Typo="Typo.body2" Class="mb-3">
+            The command targets <code>@DeviceApGateway:7000</code> &mdash; the device's default
+            gateway while it is in AP mode. Run it from the machine connected to the AC's hotspot.
+        </MudText>
+
         @if (IsFormValid)
         {
             <MudPaper Class="pa-4 mb-3" Style="background-color: var(--mud-palette-surface-variant);">
