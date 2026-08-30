@@ -2,7 +2,9 @@
 
 This project provides a **modern, feature-rich local replacement server for GREE air conditioners** that normally require internet connectivity to communicate with GREE's cloud servers. The solution allows GREE AC units to function completely offline by implementing a local server that mimics the original GREE server functionality.
 
-**Based on the excellent foundation of [GreeAC-DummyServer](https://github.com/emtek-at/GreeAC-DummyServer)**, this project has been completely rewritten and modernized with .NET 10, featuring a comprehensive web UI, real-time device monitoring, advanced management capabilities, and TLS/HTTPS support.
+**Based on the excellent foundation of [GreeAC-DummyServer](https://github.com/emtek-at/GreeAC-DummyServer)**, this project has been completely rewritten and modernized with .NET 10, featuring a comprehensive web UI, real-time device monitoring, advanced management capabilities, and TLS/HTTPS support.[^ai]
+
+[^ai]: This project contains AI-assisted contributions — parts of the code, tests, and documentation were written or refined with the help of AI coding assistants, and reviewed before being merged.
 
 ## 🌟 **Features**
 
@@ -35,12 +37,13 @@ This project provides a **modern, feature-rich local replacement server for GREE
 - **Device Control Interface** with remove buttons and management actions
 
 ### **Developer & Operations Features**
-- **Structured Logging** with Serilog
-- **Background Services** for TCP server hosting
+- **Structured Logging** with Serilog (per-connection correlation IDs)
+- **Background Services** for TCP server hosting, with idle-timeout and a concurrent-connection cap
+- **Fail-fast configuration** - required settings are validated at startup
 - **Cross-platform Support** (Windows/Linux)
 - **Docker Ready** with proper networking
 - **System Service Integration** (systemd/Windows Service)
-- **Comprehensive Unit Tests**
+- **Unit + integration tests** covering the protocol core (crypto, message handler, socket/UDP handling)
 
 ## 🚀 **Installation**
 
@@ -79,8 +82,10 @@ docker run -d \
   gree-ac-local-server:latest
 ```
 
-#### **TLS Configuration**
-To enable TLS/HTTPS for the web interface, set `GreeServer__ServerOptions__TLSEnabled=true` and provide certificate configuration:
+#### **TLS Configuration (device listener on port 1813)**
+`GreeServer__ServerOptions__TLSEnabled=true` starts an additional TLS listener on port **1813**
+for AC firmware that talks TLS instead of plain TCP. Provide a certificate, or let the server
+generate a self-signed one:
 
 ```bash
 docker run -d \
@@ -90,7 +95,7 @@ docker run -d \
   -e GreeServer__ServerOptions__ExternalIp=192.168.1.100 \
   -e GreeServer__EnableUI=true \
   -e GreeServer__ServerOptions__TLSEnabled=true \
-  -e GreeServer__EncryptionOptions__TLSCertificatePath=/app/certs/server.crt \
+  -e GreeServer__EncryptionOptions__TLSCertificatePath=/app/certs/server.pfx \
   -e GreeServer__EncryptionOptions__TLSCertificatePassword=your-cert-password \
   -p 5000:5000 \
   -p 1813:1813 \
@@ -99,7 +104,16 @@ docker run -d \
   gree-ac-local-server:latest
 ```
 
-Access the web interface via HTTPS at `http://your-server-ip:5100`.
+- The certificate file must be **PKCS#12** (`.pfx` / `.p12`) so it carries the private key.
+  Other extensions are loaded as a public-key-only certificate and the TLS listener will not start.
+- With `TLSCertificateAutoCreate=true` (default) and no `TLSCertificatePath`, a self-signed cert
+  (with SAN for `DomainName`) is generated in memory on each start. If a path is also given, the
+  generated cert is written there as a `.pfx`.
+- `AllowLegacyTlsProtocols=false` restricts this listener to TLS 1.2 / 1.3 (default `true` keeps
+  SSL3–TLS1.1 for old firmware).
+
+This is independent of the web UI: to serve the UI itself over HTTPS, configure Kestrel
+(`ASPNETCORE_URLS=...;https://+:5443`) with its own certificate.
 
 #### **Building Docker Image Locally**
 ```bash
@@ -303,16 +317,19 @@ The application is configured via `appsettings.json`. Here are the key settings:
 {
   "GreeServer": {
     "ServerOptions": {
-      "DomainName": "gree.example.com",   // Domain name pointed to your server
-      "ExternalIp": "192.168.1.100",      // IP address of your server
-      "TLSEnabled": true,                  // Enable TLS for secure connections
-      "ListenIPAddresses": []              // Specific IPs to bind to (empty = all)
+      "DomainName": "gree.example.com",   // Domain name pointed to your server (required)
+      "ExternalIp": "192.168.1.100",      // IP address of your server (required)
+      "TLSEnabled": true,                  // Start the extra device TLS listener on port 1813
+      "ListenIPAddresses": [],             // Specific IPs to bind to (empty = all)
+      "IdleTimeoutSeconds": 180,           // Close an idle device connection after N seconds (<=0 disables)
+      "MaxConcurrentConnections": 200,     // Cap on concurrent device connections (<=0 disables)
+      "AllowLegacyTlsProtocols": true      // Accept SSL3/TLS1.0/1.1 for old firmware; false = TLS1.2+ only
     },
     "EncryptionOptions": {
-      "DefaultCryptoKey": "a3K8Bx%2r8Y7#xDh",  // GREE encryption key (default works)
-      "TLSCertificateAutoCreate": true,         // Auto-create TLS certificate if needed
-      "TLSCertificatePath": "",                 // Path to custom TLS certificate
-      "TLSCertificatePassword": ""              // Password for TLS certificate
+      "DefaultCryptoKey": "a3K8Bx%2r8Y7#xDh",  // GREE encryption key (default works; required)
+      "TLSCertificateAutoCreate": true,         // Generate a self-signed cert if no path is set
+      "TLSCertificatePath": "",                 // Path to a PKCS#12 (.pfx/.p12) certificate
+      "TLSCertificatePassword": ""              // Password for the .pfx (blank if none)
     }
   },
   "Server": {
@@ -336,6 +353,10 @@ The application is configured via `appsettings.json`. Here are the key settings:
 - **Example**: `"192.168.1.100"` (your server's LAN IP)
 - **Note**: Use the actual IP address, not `localhost` or `127.0.0.1`
 
+> `DomainName`, `ExternalIp` and `GreeServer.EncryptionOptions.DefaultCryptoKey` are validated
+> at startup — if any is missing the server refuses to start with a clear error instead of
+> failing on every device packet.
+
 #### **`Server.EnableUI`**
 - **Purpose**: Controls whether the web interface is available
 - **Values**: 
@@ -351,9 +372,8 @@ The application is configured via `appsettings.json`. Here are the key settings:
   - `true` - Device configuration features enabled (default)
   - `false` - Device management operations disabled
 - **Affects**:
-  - **API Endpoints**: `/device-config/set-name` and `/device-config/set-remote-host` return errors when disabled
-  - **Web UI**: Management sections (Set Device Name, Set Remote Host) are hidden when disabled
-  - **Query Operations**: Device status queries (`/device-config/status`) remain available regardless of this setting
+  - **API Endpoints**: *All* `/device-config/*` operations (`status`, `set-name`, `set-remote-host`) return an error when disabled — every one of them contacts the device over UDP, so they are gated the same way
+  - **Web UI**: Set Device Name / Set Remote Host sections are hidden when disabled; the Query Status form stays visible but reports "management is disabled" if used
 - **Use Cases**: 
   - Set to `false` for read-only deployments or security-conscious environments
   - Set to `true` when device configuration changes are needed
@@ -363,7 +383,7 @@ The application is configured via `appsettings.json`. Here are the key settings:
 ```json
 {
   "DeviceManager": {
-    "DeviceTimeoutMinutes": 60        // Minutes for device timeout (used for display status, not automatic removal)
+    "DeviceTimeoutMinutes": 60        // Online/offline threshold shown in the UI (no automatic removal); exposed via /api/config/server
   },
   "Kestrel": {
     "Endpoints": {
@@ -439,14 +459,16 @@ The server includes a dedicated **WiFi Configuration page** at `/wifi-config` to
 - **Cross-platform Support** - Generates appropriate commands for Linux, macOS, and Windows
 - **Real-time Command Generation** - Command updates immediately as you type
 - **Multiple Windows Options** - WSL, PowerShell (native), and Ncat alternatives
-- **Password Security** - Visibility toggle and proper JSON string escaping
+- **Injection-safe** - The payload is built with a JSON serializer and shell-quoted per target
+  shell, so any SSID/password (including quotes, `$`, backticks, etc.) is passed literally and
+  cannot break the command or run injected code. Control characters are rejected.
 - **Copy to Clipboard** - One-click command copying
 - **Step-by-step Instructions** - Clear guidance for the entire process
 - **Installation Help** - Platform-specific installation instructions
 
 #### **Supported Platforms**
-- **Linux** - Standard netcat (`nc -cu`)
-- **macOS** - Standard netcat (`nc -cu`)
+- **Linux** - Standard netcat (`nc -u`)
+- **macOS** - Standard netcat (`nc -u`)
 - **Windows (WSL)** - Netcat in Windows Subsystem for Linux
 - **Windows (PowerShell)** - Native .NET UDP socket approach (no additional software needed)
 - **Windows (Ncat)** - Nmap suite's netcat alternative
@@ -463,18 +485,21 @@ The server includes a dedicated **WiFi Configuration page** at `/wifi-config` to
 
 **Linux/macOS/WSL:**
 ```bash
-echo -n "{\"psw\": \"password\",\"ssid\": \"network\",\"t\": \"wlan\"}" | nc -cu 192.168.1.1 7000
+printf %s '{"psw":"password","ssid":"network","t":"wlan"}' | nc -u 192.168.1.1 7000
 ```
 
 **Windows PowerShell (recommended for Windows users):**
 ```powershell
-$bytes = [System.Text.Encoding]::UTF8.GetBytes('{"psw": "password","ssid": "network","t": "wlan"}'); $client = New-Object System.Net.Sockets.UdpClient; $client.Connect('192.168.1.1', 7000); $client.Send($bytes, $bytes.Length); $client.Close()
+$bytes = [System.Text.Encoding]::UTF8.GetBytes('{"psw":"password","ssid":"network","t":"wlan"}'); $client = New-Object System.Net.Sockets.UdpClient; $client.Connect('192.168.1.1', 7000); $client.Send($bytes, $bytes.Length); $client.Close()
 ```
 
 **Windows Ncat:**
-```cmd
-echo {"psw": "password","ssid": "network","t": "wlan"} | ncat -u 192.168.1.1 7000
+```bash
+printf %s '{"psw":"password","ssid":"network","t":"wlan"}' | ncat -u 192.168.1.1 7000
 ```
+
+The SSID/password are single-quoted (POSIX) or `''`-doubled (PowerShell) in the real output,
+so the examples above only show the shape of the command.
 
 #### **Requirements**
 - **AC in AP mode** - Device must be broadcasting its own WiFi network
@@ -542,12 +567,15 @@ The server exposes RESTful API endpoints for programmatic access:
   ```json
   {
     "enableManagement": true,
-    "enableUI": true
+    "enableUI": true,
+    "deviceTimeoutMinutes": 60
   }
   ```
+  `deviceTimeoutMinutes` mirrors `DeviceManager:DeviceTimeoutMinutes` and drives the
+  online/offline threshold shown in the web UI.
 
 ### **Device Configuration API**
-- **POST `/api/device-config/status`** - Query device status (always available)
+- **POST `/api/device-config/status`** - Query device status (requires `EnableManagement: true`)
 - **POST `/api/device-config/set-name`** - Set device name (requires `EnableManagement: true`)
 - **POST `/api/device-config/set-remote-host`** - Configure remote host (requires `EnableManagement: true`)
 
@@ -569,7 +597,8 @@ The server exposes RESTful API endpoints for programmatic access:
   }
   ```
 
-**Note**: Management endpoints return HTTP 200 with error response when `EnableManagement` is disabled.
+**Note**: `/device-config/*` endpoints (status included) return HTTP 200 with an error body
+(`errorCode: "MANAGEMENT_DISABLED"`) when `EnableManagement` is disabled.
 
 ## �🔧 **Troubleshooting**
 
@@ -603,7 +632,7 @@ The server exposes RESTful API endpoints for programmatic access:
 4. **Connection Refused** - Ensure you're connected to AC's WiFi network and 192.168.1.1 is reachable
 5. **Command Fails on Windows** - Try PowerShell version or install netcat via `choco install netcat`
 6. **AC Doesn't Connect to Home WiFi** - Verify SSID and password are correct, check WiFi signal strength
-7. **Special Characters in Password** - Use PowerShell option as it handles JSON escaping automatically
+7. **Special Characters in SSID/Password** - Handled automatically for every platform (JSON serialization + shell quoting). Only raw control characters (newline, tab, NUL) are rejected — remove them from the value
 
 ### **Web UI Not Loading**
 1. **Check Port 5100** - Ensure it's not blocked by firewall
@@ -694,8 +723,12 @@ The following environment variables can be used to configure the container:
 | `GreeServer__ServerOptions__DomainName` | `gree.local.server` | Domain name for DNS configuration |
 | `GreeServer__ServerOptions__ExternalIp` | `127.0.0.1` | Server IP address |
 | `GreeServer__EnableUI` | `true` | Enable/disable web interface |
-| `GreeServer__ServerOptions__TLSEnabled` | `false` | Enable TLS/HTTPS for web UI |
-| `DeviceManager__DeviceTimeoutMinutes` | `60` | Device timeout in minutes |
+| `GreeServer__ServerOptions__TLSEnabled` | `false` | Start the device TLS listener on port 1813 |
+| `GreeServer__ServerOptions__AllowLegacyTlsProtocols` | `true` | Accept SSL3/TLS1.0/1.1 on the 1813 listener; `false` = TLS1.2+ only |
+| `GreeServer__ServerOptions__IdleTimeoutSeconds` | `180` | Drop a device connection after N seconds of silence |
+| `GreeServer__ServerOptions__MaxConcurrentConnections` | `200` | Cap on concurrent device connections |
+| `Server__EnableManagement` | `true` | Enable the `/device-config/*` endpoints and UI |
+| `DeviceManager__DeviceTimeoutMinutes` | `60` | Device online/offline display threshold (minutes) |
 
 ### **Docker Compose**
 
@@ -723,25 +756,29 @@ For development with hot reload, use `docker-compose.dev.yml`:
 docker-compose -f docker-compose.dev.yml up -d
 ```
 
-### **TLS/HTTPS Configuration**
+### **Device TLS Listener (port 1813)**
 
-To enable TLS/HTTPS for the web interface:
+To accept AC firmware that connects over TLS:
 
 1. Set `GreeServer__ServerOptions__TLSEnabled=true` in your environment variables or docker-compose.yml
-2. Provide certificate configuration via environment variables:
-   - `GreeServer__EncryptionOptions__TLSCertificatePath`: Path to the certificate file inside the container
-   - `GreeServer__EncryptionOptions__TLSCertificatePassword`: Password for the certificate
+2. Provide a **PKCS#12** certificate (or rely on the auto-generated self-signed one):
+   - `GreeServer__EncryptionOptions__TLSCertificatePath`: Path to a `.pfx` / `.p12` file inside the container
+   - `GreeServer__EncryptionOptions__TLSCertificatePassword`: Password for the `.pfx` (blank if none)
 3. Mount your certificates volume: `-v /path/to/certs:/app/certs:ro`
+4. Optionally set `GreeServer__ServerOptions__AllowLegacyTlsProtocols=false` to require TLS 1.2+
 
-Access the web interface via HTTPS at `https://your-server-ip:5443`.
+Serving the **web UI** over HTTPS is a separate concern — configure Kestrel via
+`ASPNETCORE_URLS` (e.g. `https://+:5443`) with its own certificate.
 
 ## 🧪 **Development**
 
 ### **Project Structure**
-- **`GreeACLocalServer.Api`** - Main API project with TCP server and Blazor UI
+- **`GreeACLocalServer.Device`** - GREE protocol core: AES crypto, TCP listener for devices, outbound UDP device control (no ASP.NET dependency)
+- **`GreeACLocalServer.Api`** - Host process: minimal-API endpoints, SignalR hub, and the Blazor Server render host
 - **`GreeACLocalServer.UI`** - Blazor WebAssembly UI components
 - **`GreeACLocalServer.Shared`** - Shared contracts and interfaces
-- **`GreeACLocalServer.Api.Tests`** - Unit tests
+- **`GreeACLocalServer.Api.Tests`** - xUnit tests for the Api layer
+- **`GreeACLocalServer.Device.Tests`** - xUnit tests for the protocol core (crypto, message handler, socket/UDP handling)
 
 ### **Building**
 ```bash
@@ -750,8 +787,11 @@ dotnet build src/GreeACLocalServer.sln
 
 ### **Testing**
 ```bash
-dotnet test src/GreeACLocalServer.Api.Tests
+dotnet test src/GreeACLocalServer.sln
 ```
+
+Integration tests that bind real loopback sockets are tagged; skip them with
+`dotnet test src/GreeACLocalServer.sln --filter "Category!=Integration"`.
 
 ### **Running in Development**
 ```bash
