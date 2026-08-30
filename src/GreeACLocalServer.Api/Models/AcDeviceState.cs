@@ -28,6 +28,13 @@ namespace GreeACLocalServer.Api.Models
 
         /// <summary>When the firmware identifier was last successfully queried from the device.</summary>
         public DateTime? FirmwareCheckedUtc { get; init; }
+
+        /// <summary>
+        /// When a firmware query was last <em>attempted</em> against the device
+        /// (success or failure). Used to throttle the opportunistic background
+        /// refresh so an unreachable device is not re-probed on every reconnect.
+        /// </summary>
+        public DateTime? FirmwareRefreshAttemptedUtc { get; init; }
     }
 
     /// <summary>A single observed (port, TLS) connection endpoint with its last-seen time.</summary>

@@ -78,7 +78,9 @@ internal class DeviceControllerService(
                 var scanResult = await ScanDeviceAsync(operation.IpAddress, cancellationToken);
                 if (!scanResult.IsSuccess || string.IsNullOrWhiteSpace(scanResult.CryptoKey))
                 {
-                    _logger.LogWarning("Scan failed: {ErrorCode} - {Message}", scanResult.ErrorCode, scanResult.Message);
+                    // Best-effort: the opportunistic background refresh calls this on
+                    // every device, so an unreachable device must not log at warning.
+                    _logger.LogDebug("Firmware scan failed: {ErrorCode} - {Message}", scanResult.ErrorCode, scanResult.Message);
                     return new DeviceFirmwareResult(false, scanResult.Message, scanResult.ErrorCode);
                 }
 
@@ -93,12 +95,12 @@ internal class DeviceControllerService(
                     return new DeviceFirmwareResult(true, string.Empty, hid: hid, firmwareVersion: version, firmwareCode: code, macAddress: scanResult.MacAddress);
                 }
 
-                _logger.LogWarning("Firmware query failed: {ErrorCode} - {Message}", result.ErrorCode, result.Message);
+                _logger.LogDebug("Firmware query failed: {ErrorCode} - {Message}", result.ErrorCode, result.Message);
                 return new DeviceFirmwareResult(false, result.IsSuccess ? "Device did not report a firmware identifier" : result.Message, result.ErrorCode ?? "NO_HID");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error querying device firmware for IP {IpAddress}", operation.IpAddress);
+                _logger.LogWarning(ex, "Error querying device firmware for IP {IpAddress}", operation.IpAddress);
                 return new DeviceFirmwareResult(false, $"Failed to query device firmware: {ex.Message}", "QUERY_ERROR");
             }
         }
