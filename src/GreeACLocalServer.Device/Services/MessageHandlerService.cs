@@ -218,14 +218,12 @@ internal class MessageHandlerService(ICryptoService cryptoService, IOptionsMonit
         var responseData = new TimeResponse
         {
             ResponseType = ResponseType.Time,
-            // NOTE (WP-03/F10): the format string has no separator between the date and
-            // time parts ("2026-08-2914:30:00"). The referenced implementations
-            // (gree_versati, python-gree, homebridge-gree) suggest a space-separated
-            // "yyyy-MM-dd HH:mm:ss" is expected, but this could not be independently
-            // confirmed against a real device, so the on-the-wire format is left
-            // unchanged. Only the redundant .ToLocalTime() (DateTime.Now is already
-            // local) has been removed.
-            Time = DateTime.Now.ToString("yyyy-MM-ddHH:mm:ss")
+            // Space-separated "yyyy-MM-dd HH:mm:ss", matching the referenced
+            // implementations (gree_versati, python-gree, homebridge-gree,
+            // joserebelo/gree-dummy-tls-server). A real device tolerates the
+            // previously used separator-less form, but the missing space was an
+            // accidental typo in the format string.
+            Time = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
         };
 
         return new GreeHandlerResponse
