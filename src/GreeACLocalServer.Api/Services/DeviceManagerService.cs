@@ -20,8 +20,9 @@ public class DeviceManagerService(
     IHubContext<DeviceHub> hubContext,
     IDnsResolverService dnsResolver,
     GreeACLocalServer.Device.Interfaces.IDeviceControllerService deviceController,
-    IFirmwareUpdateService? firmwareUpdateService = null)
-    : HeadlessDeviceManagerService(dnsResolver, deviceController, firmwareUpdateService)
+    IFirmwareUpdateService? firmwareUpdateService = null,
+    IOptionsMonitor<FirmwareUpdateOptions>? firmwareOptions = null)
+    : HeadlessDeviceManagerService(dnsResolver, deviceController, firmwareUpdateService, firmwareOptions)
 {
     private readonly IHubContext<DeviceHub> _hub = hubContext;
 
@@ -31,8 +32,9 @@ public class DeviceManagerService(
     /// <param name="deviceState">The updated device state</param>
     protected override async Task OnDeviceUpdatedAsync(AcDeviceState deviceState)
     {
-        // Send SignalR notification for device upsert
-        var dto = await ProjectAsync(deviceState);
+        // Send SignalR notification for device upsert. Cache-only: this runs on the
+        // single-threaded device-event loop and must not block on a cloud lookup.
+        var dto = await ProjectAsync(deviceState, allowRemoteFetch: false);
         await _hub.Clients.All.SendAsync(DeviceHubMethods.DeviceUpserted, dto);
     }
 

@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using GreeACLocalServer.Device.Interfaces;
 using GreeACLocalServer.Device.Requests;
+using GreeACLocalServer.Device.Results;
 
 namespace GreeACLocalServer.Api.Services;
 
@@ -11,16 +12,24 @@ namespace GreeACLocalServer.Api.Services;
 public class HeadlessDeviceManagerService(
     IDnsResolverService dnsResolver,
     IDeviceControllerService deviceController,
-    IFirmwareUpdateService? firmwareUpdateService = null) : IInternalDeviceManagerService
+    IFirmwareUpdateService? firmwareUpdateService = null,
+    IOptionsMonitor<FirmwareUpdateOptions>? firmwareOptions = null) : IInternalDeviceManagerService
 
 {
-    /// <summary>Re-query a device's firmware at most this often when doing so opportunistically.</summary>
+    /// <summary>After a successful opportunistic firmware query, do not re-query for this long.</summary>
     private static readonly TimeSpan FirmwareRefreshInterval = TimeSpan.FromDays(7);
+
+    /// <summary>After a failed opportunistic firmware query, back off for this long before retrying.</summary>
+    private static readonly TimeSpan FirmwareRetryInterval = TimeSpan.FromHours(6);
 
     protected readonly ConcurrentDictionary<string, AcDeviceState> _deviceStates = new();
     protected readonly IDnsResolverService _dnsResolver = dnsResolver;
     private readonly IDeviceControllerService _deviceController = deviceController;
     private readonly IFirmwareUpdateService? _firmwareUpdateService = firmwareUpdateService;
+    private readonly IOptionsMonitor<FirmwareUpdateOptions>? _firmwareOptions = firmwareOptions;
+
+    /// <summary>MACs with an opportunistic firmware query in progress, so reconnect bursts don't pile up.</summary>
+    private readonly ConcurrentDictionary<string, byte> _firmwareRefreshInFlight = new();
 
     public virtual async Task UpdateOrAddAsync(string macAddress, string? ipAddress, int port = 0, bool isTls = false)
     {
@@ -57,7 +66,9 @@ public class HeadlessDeviceManagerService(
 
     public virtual async Task<IEnumerable<DeviceDto>> GetAllDeviceStatesAsync(CancellationToken cancellationToken = default)
     {
-        var projected = await Task.WhenAll(_deviceStates.Values.Select(s => ProjectAsync(s, cancellationToken)));
+        // Cache-only: a device-list poll must not fan out into N cloud lookups.
+        var projected = await Task.WhenAll(
+            _deviceStates.Values.Select(s => ProjectAsync(s, allowRemoteFetch: false, cancellationToken)));
         return projected;
     }
 
@@ -65,7 +76,7 @@ public class HeadlessDeviceManagerService(
     {
         if (_deviceStates.TryGetValue(macAddress, out var state))
         {
-            return await ProjectAsync(state, cancellationToken);
+            return await ProjectAsync(state, allowRemoteFetch: true, cancellationToken);
         }
         return null;
     }
@@ -82,41 +93,105 @@ public class HeadlessDeviceManagerService(
             return null;
         }
 
-        var result = await _deviceController.GetDeviceFirmwareAsync(new GetDeviceStatusRequest(current.IpAddress), cancellationToken);
-        if (result is null || !result.IsSuccess || string.IsNullOrWhiteSpace(result.Hid))
+        DeviceFirmwareResult? result;
+        try
+        {
+            result = await _deviceController.GetDeviceFirmwareAsync(new GetDeviceStatusRequest(current.IpAddress), cancellationToken);
+        }
+        catch
+        {
+            StampFirmwareAttempt(macAddress);
+            throw;
+        }
+
+        var succeeded = result is not null && result.IsSuccess && !string.IsNullOrWhiteSpace(result.Hid);
+        var updated = StampFirmwareResult(macAddress, succeeded ? result : null);
+
+        if (!succeeded || updated is null)
         {
             return null;
         }
 
-        var now = DateTime.UtcNow;
-        var updated = _deviceStates.AddOrUpdate(macAddress,
-            current with
-            {
-                FirmwareHid = result.Hid,
-                FirmwareVersion = string.IsNullOrWhiteSpace(result.FirmwareVersion) ? null : result.FirmwareVersion,
-                FirmwareCode = string.IsNullOrWhiteSpace(result.FirmwareCode) ? null : result.FirmwareCode,
-                FirmwareCheckedUtc = now
-            },
-            (key, existing) => existing with
-            {
-                FirmwareHid = result.Hid,
-                FirmwareVersion = string.IsNullOrWhiteSpace(result.FirmwareVersion) ? null : result.FirmwareVersion,
-                FirmwareCode = string.IsNullOrWhiteSpace(result.FirmwareCode) ? null : result.FirmwareCode,
-                FirmwareCheckedUtc = now
-            });
-
+        // Project first (allowRemoteFetch: true) so the cloud lookup result is in
+        // the cache before the SignalR push: the push re-projects cache-only, and
+        // other UI clients then see the fresh UpdateAvailable in the same round
+        // rather than one cycle later.
+        var dto = await ProjectAsync(updated, allowRemoteFetch: true, cancellationToken);
         await OnDeviceUpdatedAsync(updated);
-        return await ProjectAsync(updated, cancellationToken);
+        return dto;
+    }
+
+    /// <summary>
+    /// Records that a firmware query was attempted now (throttles the opportunistic
+    /// background refresh even when the device is unreachable).
+    /// </summary>
+    private void StampFirmwareAttempt(string macAddress) => StampFirmwareResult(macAddress, null);
+
+    /// <summary>
+    /// Marks a firmware query attempt on the device state. When
+    /// <paramref name="result"/> is a successful lookup the parsed firmware fields
+    /// and <see cref="AcDeviceState.FirmwareCheckedUtc"/> are updated too; either
+    /// way <see cref="AcDeviceState.FirmwareRefreshAttemptedUtc"/> is set.
+    /// </summary>
+    private AcDeviceState? StampFirmwareResult(string macAddress, DeviceFirmwareResult? result)
+    {
+        var now = DateTime.UtcNow;
+
+        AcDeviceState Apply(AcDeviceState state)
+        {
+            state = state with { FirmwareRefreshAttemptedUtc = now };
+            if (result is null)
+            {
+                return state;
+            }
+
+            return state with
+            {
+                FirmwareHid = result.Hid,
+                FirmwareVersion = string.IsNullOrWhiteSpace(result.FirmwareVersion) ? null : result.FirmwareVersion,
+                FirmwareCode = string.IsNullOrWhiteSpace(result.FirmwareCode) ? null : result.FirmwareCode,
+                FirmwareCheckedUtc = now
+            };
+        }
+
+        // Compare-exchange loop: never resurrect a device that was removed concurrently.
+        while (_deviceStates.TryGetValue(macAddress, out var existing))
+        {
+            var next = Apply(existing);
+            if (_deviceStates.TryUpdate(macAddress, next, existing))
+            {
+                return next;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
     /// Fire-and-forget firmware query for devices that have never reported one (or
-    /// whose last successful query is older than <see cref="FirmwareRefreshInterval"/>).
-    /// Best effort: failures are swallowed, the previous value is kept.
+    /// whose last successful query is stale). Gated by
+    /// <see cref="FirmwareUpdateOptions.AutoQuery"/>, throttled with a two-tier
+    /// backoff (7 days after success, 6 hours after failure) and deduplicated per
+    /// MAC. Best effort: failures are swallowed, the previous value is kept.
     /// </summary>
     private void MaybeRefreshFirmwareInBackground(AcDeviceState state)
     {
-        if (state.FirmwareCheckedUtc is { } checkedUtc && DateTime.UtcNow - checkedUtc < FirmwareRefreshInterval)
+        if (_firmwareOptions is not null && !_firmwareOptions.CurrentValue.AutoQuery)
+        {
+            return;
+        }
+
+        var now = DateTime.UtcNow;
+
+        if (state.FirmwareCheckedUtc is { } ok && now - ok < FirmwareRefreshInterval)
+        {
+            return;
+        }
+        if (state.FirmwareRefreshAttemptedUtc is { } tried && now - tried < FirmwareRetryInterval)
+        {
+            return;
+        }
+        if (!_firmwareRefreshInFlight.TryAdd(state.MacAddress, 0))
         {
             return;
         }
@@ -131,6 +206,10 @@ public class HeadlessDeviceManagerService(
             {
                 // opportunistic only
             }
+            finally
+            {
+                _firmwareRefreshInFlight.TryRemove(state.MacAddress, out _);
+            }
         });
     }
 
@@ -140,7 +219,7 @@ public class HeadlessDeviceManagerService(
     /// cache-backed (see <see cref="FirmwareUpdateService"/>) so repeated calls
     /// are cheap.
     /// </summary>
-    protected async Task<DeviceDto> ProjectAsync(AcDeviceState state, CancellationToken cancellationToken = default)
+    protected async Task<DeviceDto> ProjectAsync(AcDeviceState state, bool allowRemoteFetch, CancellationToken cancellationToken = default)
     {
         var dto = ToDto(state);
 
@@ -151,7 +230,7 @@ public class HeadlessDeviceManagerService(
             return dto;
         }
 
-        var update = await _firmwareUpdateService.CheckAsync(state.FirmwareCode, state.FirmwareVersion, cancellationToken);
+        var update = await _firmwareUpdateService.CheckAsync(state.FirmwareCode, state.FirmwareVersion, allowRemoteFetch, cancellationToken);
         if (update is null)
         {
             return dto;

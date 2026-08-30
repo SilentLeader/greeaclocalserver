@@ -4,9 +4,13 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Options;
 using Moq;
+using GreeACLocalServer.Api.Interfaces;
+using GreeACLocalServer.Api.Models;
 using GreeACLocalServer.Api.Options;
 using GreeACLocalServer.Api.Services;
 using GreeACLocalServer.Device.Interfaces;
+using GreeACLocalServer.Device.Requests;
+using GreeACLocalServer.Device.Results;
 
 namespace GreeACLocalServer.Api.Tests;
 
@@ -298,6 +302,190 @@ public class HeadlessDeviceManagerServiceTests
         Assert.Null(result);
         var reloaded = await _deviceManagerService.GetAsync(mac);
         Assert.Null(reloaded!.FirmwareVersion);
+    }
+
+    // ---- WP-14: opportunistic firmware refresh throttle / dedup / gate ----
+
+    private sealed class OptionsMonitorStub<T>(T value) : IOptionsMonitor<T>
+    {
+        public T CurrentValue { get; } = value;
+        public T Get(string? name) => CurrentValue;
+        public IDisposable? OnChange(Action<T, string?> listener) => null;
+    }
+
+    private HeadlessDeviceManagerService CreateWithFirmwareOptions(FirmwareUpdateOptions options) =>
+        new(_mockDnsResolver.Object, _mockDeviceController.Object, firmwareUpdateService: null,
+            new OptionsMonitorStub<FirmwareUpdateOptions>(options));
+
+    private static Task WaitUntilAsync(Func<bool> condition, int timeoutMs = 2000) =>
+        WaitUntilAsync(() => Task.FromResult(condition()), timeoutMs);
+
+    private static async Task WaitUntilAsync(Func<Task<bool>> condition, int timeoutMs = 2000)
+    {
+        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (await condition())
+            {
+                return;
+            }
+            await Task.Delay(20);
+        }
+    }
+
+    private void SetupFirmware(DeviceFirmwareResult result) =>
+        _mockDeviceController
+            .Setup(x => x.GetDeviceFirmwareAsync(It.IsAny<GetDeviceStatusRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(result);
+
+    private int FirmwareCallCount() =>
+        _mockDeviceController.Invocations.Count(i => i.Method.Name == nameof(IDeviceControllerService.GetDeviceFirmwareAsync));
+
+    [Fact]
+    public async Task OpportunisticRefresh_FailedQuery_IsNotRetriedOnNextReconnect()
+    {
+        var mac = "AA:BB:CC:DD:EE:FF";
+        SetupFirmware(new DeviceFirmwareResult(false, "NO_RESPONSE", "NO_RESPONSE"));
+
+        await _deviceManagerService.UpdateOrAddAsync(mac, "192.168.1.100");
+        await WaitUntilAsync(() => FirmwareCallCount() >= 1);
+        await _deviceManagerService.UpdateOrAddAsync(mac, "192.168.1.100");
+        await Task.Delay(200);
+
+        Assert.Equal(1, FirmwareCallCount());
+    }
+
+    [Fact]
+    public async Task OpportunisticRefresh_SuccessfulQuery_IsNotRepeatedOnNextReconnect()
+    {
+        var mac = "AA:BB:CC:DD:EE:FF";
+        SetupFirmware(new DeviceFirmwareResult(true, "", hid: "362001065736+U-QCOM4004CV3.76.bin",
+            firmwareVersion: "3.76", firmwareCode: "362001065736", macAddress: mac));
+
+        await _deviceManagerService.UpdateOrAddAsync(mac, "192.168.1.100");
+        await WaitUntilAsync(() => FirmwareCallCount() >= 1);
+        await WaitUntilAsync(async () => (await _deviceManagerService.GetAsync(mac))?.FirmwareVersion == "3.76");
+
+        await _deviceManagerService.UpdateOrAddAsync(mac, "192.168.1.100");
+        await Task.Delay(200);
+
+        Assert.Equal(1, FirmwareCallCount());
+    }
+
+    [Fact]
+    public async Task OpportunisticRefresh_ConcurrentReconnects_QueryDeviceOnce()
+    {
+        var mac = "AA:BB:CC:DD:EE:FF";
+        _mockDeviceController
+            .Setup(x => x.GetDeviceFirmwareAsync(It.IsAny<GetDeviceStatusRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(async () =>
+            {
+                await Task.Delay(200);
+                return new DeviceFirmwareResult(false, "NO_RESPONSE", "NO_RESPONSE");
+            });
+
+        await Task.WhenAll(Enumerable.Range(0, 8)
+            .Select(_ => _deviceManagerService.UpdateOrAddAsync(mac, "192.168.1.100")));
+        await Task.Delay(400);
+
+        Assert.Equal(1, FirmwareCallCount());
+    }
+
+    [Fact]
+    public async Task AutoQueryDisabled_DoesNotQueryFirmwareOnReconnect()
+    {
+        var service = CreateWithFirmwareOptions(new FirmwareUpdateOptions { AutoQuery = false });
+        SetupFirmware(new DeviceFirmwareResult(true, "", hid: "362001065736+U-QCOM4004CV3.76.bin",
+            firmwareVersion: "3.76", firmwareCode: "362001065736"));
+
+        await service.UpdateOrAddAsync("AA:BB:CC:DD:EE:FF", "192.168.1.100");
+        await Task.Delay(200);
+
+        Assert.Equal(0, FirmwareCallCount());
+    }
+
+    [Fact]
+    public async Task AutoQueryDisabled_ManualRefreshStillWorks()
+    {
+        var service = CreateWithFirmwareOptions(new FirmwareUpdateOptions { AutoQuery = false });
+        SetupFirmware(new DeviceFirmwareResult(true, "", hid: "362001065736+U-QCOM4004CV3.76.bin",
+            firmwareVersion: "3.76", firmwareCode: "362001065736", macAddress: "AA:BB:CC:DD:EE:FF"));
+
+        await service.UpdateOrAddAsync("AA:BB:CC:DD:EE:FF", "192.168.1.100");
+        var refreshed = await service.RefreshFirmwareAsync("AA:BB:CC:DD:EE:FF");
+
+        Assert.NotNull(refreshed);
+        Assert.Equal("3.76", refreshed!.FirmwareVersion);
+    }
+
+    [Fact]
+    public async Task GetAllDeviceStatesAsync_DoesNotTriggerCloudUpdateFetch()
+    {
+        var firmware = new Mock<IFirmwareUpdateService>();
+        var service = new HeadlessDeviceManagerService(_mockDnsResolver.Object, _mockDeviceController.Object, firmware.Object);
+        SetupFirmware(new DeviceFirmwareResult(true, "", hid: "362001065736+U-QCOM4004CV3.76.bin",
+            firmwareVersion: "3.76", firmwareCode: "362001065736"));
+
+        await service.UpdateOrAddAsync("AA:BB:CC:DD:EE:FF", "192.168.1.100");
+        await service.RefreshFirmwareAsync("AA:BB:CC:DD:EE:FF");
+
+        firmware.Invocations.Clear();
+        _ = await service.GetAllDeviceStatesAsync();
+
+        firmware.Verify(
+            x => x.CheckAsync(It.IsAny<string>(), It.IsAny<string>(), true, It.IsAny<CancellationToken>()),
+            Times.Never);
+        firmware.Verify(
+            x => x.CheckAsync(It.IsAny<string>(), It.IsAny<string>(), false, It.IsAny<CancellationToken>()),
+            Times.AtLeastOnce);
+    }
+
+    private sealed class OrderRecordingManager(
+        Mock<IDnsResolverService> dns,
+        Mock<IDeviceControllerService> controller,
+        RecordingFirmwareService firmware)
+        : HeadlessDeviceManagerService(dns.Object, controller.Object, firmware,
+            new OptionsMonitorStub<FirmwareUpdateOptions>(new FirmwareUpdateOptions { AutoQuery = false, Enabled = true }))
+    {
+        private readonly RecordingFirmwareService _firmware = firmware;
+
+        /// <summary>CheckAsync call count observed at each device-updated push.</summary>
+        public List<int> ChecksBeforeEachPush { get; } = [];
+
+        protected override Task OnDeviceUpdatedAsync(AcDeviceState deviceState)
+        {
+            ChecksBeforeEachPush.Add(_firmware.Calls.Count);
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class RecordingFirmwareService : IFirmwareUpdateService
+    {
+        public List<bool> Calls { get; } = [];
+
+        public Task<FirmwareUpdateInfo?> CheckAsync(string firmwareCode, string currentVersion, bool allowRemoteFetch = true, CancellationToken cancellationToken = default)
+        {
+            Calls.Add(allowRemoteFetch);
+            return Task.FromResult<FirmwareUpdateInfo?>(new FirmwareUpdateInfo("9.9", true, false));
+        }
+    }
+
+    [Fact]
+    public async Task RefreshFirmwareAsync_WarmsCloudCacheBeforeThePush()
+    {
+        var firmware = new RecordingFirmwareService();
+        var manager = new OrderRecordingManager(_mockDnsResolver, _mockDeviceController, firmware);
+        SetupFirmware(new DeviceFirmwareResult(true, "", hid: "362001065736+U-QCOM4004CV3.76.bin",
+            firmwareVersion: "3.76", firmwareCode: "362001065736", macAddress: "AA:BB:CC:DD:EE:FF"));
+
+        await manager.UpdateOrAddAsync("AA:BB:CC:DD:EE:FF", "192.168.1.100");
+        var dto = await manager.RefreshFirmwareAsync("AA:BB:CC:DD:EE:FF");
+
+        // The remote (allowRemoteFetch: true) lookup ran first...
+        Assert.True(firmware.Calls[0]);
+        // ...and by the time the refresh's push fired, that lookup was already done.
+        Assert.Equal(1, manager.ChecksBeforeEachPush[^1]);
+        Assert.True(dto!.UpdateAvailable);
     }
 
     [Fact]

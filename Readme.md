@@ -330,6 +330,12 @@ The application is configured via `appsettings.json`. Here are the key settings:
       "TLSCertificateAutoCreate": true,         // Generate a self-signed cert if no path is set
       "TLSCertificatePath": "",                 // Path to a PKCS#12 (.pfx/.p12) certificate
       "TLSCertificatePassword": ""              // Password for the .pfx (blank if none)
+    },
+    "FirmwareUpdateCheck": {
+      "Enabled": false,                    // Cloud check: ask the GREE update server if newer firmware exists (see privacy note)
+      "AutoQuery": true,                   // Local-only: read each device's firmware version over LAN UDP; false = never probe automatically
+      "CacheHours": 24,                    // How long a cloud lookup result is reused
+      "BaseUrl": "https://grih.gree.com/wifiModule/Lastversion"
     }
   },
   "Server": {
@@ -378,6 +384,22 @@ The application is configured via `appsettings.json`. Here are the key settings:
   - Set to `false` for read-only deployments or security-conscious environments
   - Set to `true` when device configuration changes are needed
 - **Security**: Provides an additional layer of protection against unauthorized device configuration changes
+
+#### **`GreeServer.FirmwareUpdateCheck`**
+- **`AutoQuery`** (default `true`): the server reads each connected device's firmware
+  version over the **local network only** (outbound UDP to the device on port 7000,
+  the same scan→bind→status handshake used by the Device Config tool). No cloud
+  traffic. The result is shown in the "Device Details" dialog. A failed probe is
+  retried at most every 6 hours, a successful one every 7 days. Set to `false` on
+  locked-down deployments that must emit no automatic device traffic — the manual
+  **Refresh** button in the dialog still works.
+- **`Enabled`** (default `false`): when `true`, the server additionally asks the
+  **GREE update server** (`BaseUrl`) whether a newer firmware exists for a device's
+  firmware code, and the dialog then shows an "update available" / "up to date"
+  icon. Results are cached per firmware code for `CacheHours`.
+  > **Privacy note:** with `Enabled: true` the server makes outbound HTTPS requests
+  > to a GREE-operated host, sending the device firmware code as a query parameter.
+  > It stays off by default; leave it off if the server must not contact GREE.
 
 ### **Additional Configuration**
 ```json
@@ -728,6 +750,8 @@ The following environment variables can be used to configure the container:
 | `GreeServer__ServerOptions__IdleTimeoutSeconds` | `180` | Drop a device connection after N seconds of silence |
 | `GreeServer__ServerOptions__MaxConcurrentConnections` | `200` | Cap on concurrent device connections |
 | `Server__EnableManagement` | `true` | Allow device-config **writes** (set name / set remote host); status query is always allowed |
+| `GreeServer__FirmwareUpdateCheck__AutoQuery` | `true` | Read device firmware version over LAN UDP; `false` = no automatic device probing |
+| `GreeServer__FirmwareUpdateCheck__Enabled` | `false` | Also check the GREE update server for newer firmware (outbound HTTPS to GREE) |
 | `DeviceManager__DeviceTimeoutMinutes` | `60` | Device online/offline display threshold (minutes) |
 
 ### **Docker Compose**

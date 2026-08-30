@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using GreeACLocalServer.Api.Options;
@@ -9,17 +10,23 @@ namespace GreeACLocalServer.Api.Tests;
 
 public class FirmwareUpdateServiceTests
 {
-    private sealed class StubHandler(string json, HttpStatusCode status = HttpStatusCode.OK) : HttpMessageHandler
+    private sealed class StubHandler(string json, HttpStatusCode status = HttpStatusCode.OK, TimeSpan delay = default) : HttpMessageHandler
     {
-        public int Calls { get; private set; }
+        private int _calls;
 
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        public int Calls => Volatile.Read(ref _calls);
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            Calls++;
-            return Task.FromResult(new HttpResponseMessage(status)
+            Interlocked.Increment(ref _calls);
+            if (delay > TimeSpan.Zero)
+            {
+                await Task.Delay(delay, cancellationToken);
+            }
+            return new HttpResponseMessage(status)
             {
                 Content = new StringContent(json, Encoding.UTF8, "application/json")
-            });
+            };
         }
     }
 
@@ -28,16 +35,58 @@ public class FirmwareUpdateServiceTests
         public HttpClient CreateClient(string name) => new(handler, disposeHandler: false);
     }
 
-    private static FirmwareUpdateService Create(HttpMessageHandler handler, FirmwareUpdateOptions options) =>
+    private static FirmwareUpdateService Create(HttpMessageHandler handler, FirmwareUpdateOptions options, ILogger<FirmwareUpdateService>? logger = null) =>
         new(new SingleClientFactory(handler),
             new StaticOptionsMonitor<FirmwareUpdateOptions>(options),
-            NullLogger<FirmwareUpdateService>.Instance);
+            logger ?? NullLogger<FirmwareUpdateService>.Instance);
 
     private sealed class StaticOptionsMonitor<T>(T value) : IOptionsMonitor<T>
     {
-        public T CurrentValue { get; } = value;
-        public T Get(string? name) => CurrentValue;
+        public T Value { get; set; } = value;
+        public T CurrentValue => Value;
+        public T Get(string? name) => Value;
         public IDisposable? OnChange(Action<T, string?> listener) => null;
+    }
+
+    private sealed class CountingLogger<T> : ILogger<T>
+    {
+        public int InformationCount { get; private set; }
+        public IDisposable BeginScope<TState>(TState state) where TState : notnull => NullScope.Instance;
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            if (logLevel == LogLevel.Information)
+            {
+                InformationCount++;
+            }
+        }
+
+        private sealed class NullScope : IDisposable
+        {
+            public static readonly NullScope Instance = new();
+            public void Dispose() { }
+        }
+    }
+
+    [Fact]
+    public async Task CheckAsync_CloudCheck_ReLogsAfterDisableThenReEnable()
+    {
+        var handler = new StubHandler("{\"ver\":\"3.77\"}");
+        var monitor = new StaticOptionsMonitor<FirmwareUpdateOptions>(new FirmwareUpdateOptions { Enabled = true });
+        var logger = new CountingLogger<FirmwareUpdateService>();
+        var service = new FirmwareUpdateService(new SingleClientFactory(handler), monitor, logger);
+
+        await service.CheckAsync("362001065736", "3.76");
+        await service.CheckAsync("362001065736", "3.76");
+        Assert.Equal(1, logger.InformationCount);
+
+        monitor.Value = new FirmwareUpdateOptions { Enabled = false };
+        await service.CheckAsync("362001065736", "3.76");
+        Assert.Equal(1, logger.InformationCount);
+
+        monitor.Value = new FirmwareUpdateOptions { Enabled = true };
+        await service.CheckAsync("362001065736", "3.76");
+        Assert.Equal(2, logger.InformationCount);
     }
 
     [Fact]
@@ -77,6 +126,46 @@ public class FirmwareUpdateServiceTests
 
         Assert.False(first!.UpdateAvailable);
         Assert.False(second!.UpdateAvailable);
+        Assert.Equal(1, handler.Calls);
+    }
+
+    [Fact]
+    public async Task CheckAsync_CacheOnly_EmptyCache_ReturnsNullWithoutHttp()
+    {
+        var handler = new StubHandler("{\"ver\":\"3.77\"}");
+        var service = Create(handler, new FirmwareUpdateOptions { Enabled = true });
+
+        var result = await service.CheckAsync("362001065736", "3.76", allowRemoteFetch: false);
+
+        Assert.Null(result);
+        Assert.Equal(0, handler.Calls);
+    }
+
+    [Fact]
+    public async Task CheckAsync_CacheOnly_StaleEntry_ComputesFromStaleWithoutHttp()
+    {
+        var handler = new StubHandler("{\"ver\":\"9.99\"}");
+        var service = Create(handler, new FirmwareUpdateOptions { Enabled = true, CacheHours = 1 });
+        service.SeedCacheEntryForTests("362001065736", "3.77", forcedUpgrade: false, DateTimeOffset.UtcNow.AddDays(-30));
+
+        var result = await service.CheckAsync("362001065736", "3.76", allowRemoteFetch: false);
+
+        Assert.NotNull(result);
+        Assert.Equal("3.77", result!.LatestVersion);
+        Assert.True(result.UpdateAvailable);
+        Assert.Equal(0, handler.Calls);
+    }
+
+    [Fact]
+    public async Task CheckAsync_ConcurrentColdCache_HitsNetworkOnce()
+    {
+        var handler = new StubHandler("{\"ver\":\"3.77\"}", delay: TimeSpan.FromMilliseconds(150));
+        var service = Create(handler, new FirmwareUpdateOptions { Enabled = true });
+
+        var results = await Task.WhenAll(Enumerable.Range(0, 10)
+            .Select(_ => service.CheckAsync("362001065736", "3.76")));
+
+        Assert.All(results, r => Assert.Equal("3.77", r!.LatestVersion));
         Assert.Equal(1, handler.Calls);
     }
 
