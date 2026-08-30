@@ -11,26 +11,16 @@ namespace GreeACLocalServer.Api.Tests;
 
 public class HeadlessDeviceManagerServiceTests
 {
-    private readonly Mock<IOptionsMonitor<DeviceManagerOptions>> _mockOptions;
     private readonly Mock<IDnsResolverService> _mockDnsResolver;
     private readonly HeadlessDeviceManagerService _deviceManagerService;
-    private readonly DeviceManagerOptions _deviceManagerOptions;
 
     public HeadlessDeviceManagerServiceTests()
     {
-        _deviceManagerOptions = new DeviceManagerOptions
-        {
-            DeviceTimeoutMinutes = 30
-        };
-
-        _mockOptions = new Mock<IOptionsMonitor<DeviceManagerOptions>>();
-        _mockOptions.Setup(x => x.CurrentValue).Returns(_deviceManagerOptions);
-
         _mockDnsResolver = new Mock<IDnsResolverService>();
         _mockDnsResolver.Setup(x => x.ResolveDnsNameAsync(It.IsAny<string>()))
             .ReturnsAsync((string ip) => $"device-{ip.Replace(".", "-")}.local");
 
-        _deviceManagerService = new HeadlessDeviceManagerService(_mockOptions.Object, _mockDnsResolver.Object);
+        _deviceManagerService = new HeadlessDeviceManagerService(_mockDnsResolver.Object);
     }
 
     [Fact]
@@ -196,18 +186,10 @@ public class HeadlessDeviceManagerServiceTests
     }
 
     [Fact]
-    public void Constructor_WithNullOptions_ThrowsArgumentNullException()
-    {
-        // Arrange, Act & Assert
-        Assert.Throws<ArgumentNullException>(() =>
-            new HeadlessDeviceManagerService(null!, _mockDnsResolver.Object));
-    }
-
-    [Fact]
     public void Constructor_WithNullDnsResolver_DoesNotThrowImmediately()
     {
         // Arrange, Act & Assert - Null DNS resolver doesn't fail immediately in constructor
-        var service = new HeadlessDeviceManagerService(_mockOptions.Object, null!);
+        var service = new HeadlessDeviceManagerService(null!);
         Assert.NotNull(service);
 
         // But would fail when actually using DNS resolution
