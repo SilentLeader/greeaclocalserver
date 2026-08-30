@@ -35,6 +35,20 @@ public class CryptoServiceTests
     }
 
     [Fact]
+    public void Encrypt_KnownVector_IsStableForRegression()
+    {
+        var service = CreateService(new EncryptionOptions { DefaultCryptoKey = DefaultKey });
+
+        // AES-ECB/PKCS7 is deterministic, so a fixed plaintext + key must always yield the
+        // same base64. Locks the GREE default key + wire format against accidental drift.
+        const string plaintext = "{\"t\":\"pack\",\"i\":1}";
+        const string expected = "0CPBIZAaWWvQbj7GO1QIx+WhJktxXXIb7oUQDGsAFKc=";
+
+        Assert.Equal(expected, service.Encrypt(plaintext));
+        Assert.Equal(plaintext, service.Decrypt(expected));
+    }
+
+    [Fact]
     public void Encrypt_Decrypt_Roundtrip_ExplicitKey()
     {
         var service = CreateService(new EncryptionOptions { DefaultCryptoKey = DefaultKey });
