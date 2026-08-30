@@ -7,12 +7,10 @@ namespace GreeACLocalServer.Api.Services;
 /// Can be used directly for headless mode or inherited by DeviceManagerService for UI mode.
 /// </summary>
 public class HeadlessDeviceManagerService(
-    IOptionsMonitor<DeviceManagerOptions> options,
     IDnsResolverService dnsResolver) : IInternalDeviceManagerService
 
 {
     protected readonly ConcurrentDictionary<string, AcDeviceState> _deviceStates = new();
-    protected readonly IOptionsMonitor<DeviceManagerOptions> _options = options ?? throw new ArgumentNullException(nameof(options));
     protected readonly IDnsResolverService _dnsResolver = dnsResolver;
 
     public virtual async Task UpdateOrAddAsync(string macAddress, string? ipAddress)

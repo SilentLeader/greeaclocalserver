@@ -93,10 +93,10 @@ internal static class Program
         {
             app.UseForwardedHeaders();
             // Log the forwarded headers for debugging
-            app.Use(LogForwardedHeadersMiddleWare);
+            app.Use(LogForwardedHeadersMiddleware);
         }
 
-        // Regsiter endpoints
+        // Register endpoints
         var api = app.MapGroup("/api");
         api
             // Device endpoints
@@ -130,7 +130,7 @@ internal static class Program
             .AddAdditionalAssemblies(typeof(UI._Imports).Assembly);
     }
 
-    private static async Task LogForwardedHeadersMiddleWare(HttpContext context, Func<Task> next)
+    private static async Task LogForwardedHeadersMiddleware(HttpContext context, Func<Task> next)
     {
         Log.Debug("Request Scheme: {Scheme}, Host: {Host}, Headers: {@Headers}",
             context.Request.Scheme,

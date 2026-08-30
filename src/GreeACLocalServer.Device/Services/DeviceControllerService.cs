@@ -178,7 +178,7 @@ internal class DeviceControllerService(
             }
 
             _logger.LogDebug("Device scan completed successfully: MAC={MacAddress}", packResponse.Mac);
-            return new ScanResult(true, "Device scan successfull", null, macAddress: packResponse.Mac, cryptoKey: bindResponse.ResponseData.CryptoKey);
+            return new ScanResult(true, "Device scan successful", null, macAddress: packResponse.Mac, cryptoKey: bindResponse.ResponseData.CryptoKey);
         }
         catch (Exception ex)
         {
