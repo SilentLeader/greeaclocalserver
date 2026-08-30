@@ -25,10 +25,10 @@ services:
       - GreeServer__EncryptionOptions__DefaultCryptoKey=a3K8Bx%2r8Y7#xDh
       - GreeServer__EnableUI=true
       - Serilog__MinimumLevel=Debug
-    volumes:
-      # live source so a rebuild/restart inside the container picks up edits
-      - ./src:/src
-      - ./logs:/app/logs
+    # No host bind mounts on purpose: the container runs as root, so anything it
+    # writes into a mounted ./src (bin/, obj/) would end up root-owned and break
+    # the next local `dotnet build`. Source is baked into the image at build time
+    # and the launch config rebuilds it (`up -d --build`) on every F5.
     networks:
       - gree-debug-network
 
