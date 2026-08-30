@@ -10,9 +10,9 @@ public class DeviceConfigService(ILogger<DeviceConfigService> logger, IDeviceCon
     private readonly IOptionsMonitor<ServerOptions> _serverOptions = serverOptions;
 
     /// <summary>
-    /// Returns <c>true</c> and logs a warning when device management is disabled. All
-    /// device-config operations (query included) poke the device over UDP, so they are
-    /// gated the same way.
+    /// Returns <c>true</c> and logs a warning when device management is disabled. Used to
+    /// gate the write operations (set name / set remote host). Read-only status queries are
+    /// intentionally always available so users can still inspect a device's configuration.
     /// </summary>
     private bool IsManagementDisabled(string ipAddress, string operation)
     {
@@ -29,16 +29,8 @@ public class DeviceConfigService(ILogger<DeviceConfigService> logger, IDeviceCon
     {
         try
         {
-            if (IsManagementDisabled(request.IpAddress, "Query device status"))
-            {
-                return new DeviceStatusResponse
-                {
-                    Success = false,
-                    Message = "Device management is disabled",
-                    ErrorCode = "MANAGEMENT_DISABLED"
-                };
-            }
-
+            // Read-only query: available regardless of EnableManagement so users can still
+            // inspect a device's name / remote host (e.g. while diagnosing connectivity).
             var result = await _deviceManagementService.GetDeviceStatusAsync(new GetDeviceStatusRequest(request.IpAddress), cancellationToken);
 
             if (!result.IsSuccess)
