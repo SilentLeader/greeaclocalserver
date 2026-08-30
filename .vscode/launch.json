@@ -43,6 +43,40 @@
             }
         },
         {
+            "name": "Docker: Attach to backend",
+            "type": "coreclr",
+            "request": "attach",
+            "processId": "${command:pickRemoteProcess}",
+            "preLaunchTask": "docker-debug-up",
+            "pipeTransport": {
+                "pipeProgram": "docker",
+                "pipeArgs": [
+                    "exec",
+                    "-i",
+                    "gree-ac-local-server-debug"
+                ],
+                "debuggerPath": "/vsdbg/vsdbg",
+                "pipeCwd": "${workspaceFolder}",
+                "quoteArgs": false
+            },
+            "sourceFileMap": {
+                "/src": "${workspaceFolder}/src"
+            },
+            "justMyCode": true,
+            "logging": {
+                "moduleLoad": false
+            },
+            "postDebugTask": "docker-debug-down"
+        },
+        {
+            "name": "Docker: Open UI in Chrome",
+            "type": "chrome",
+            "request": "launch",
+            "url": "http://localhost:5100",
+            "webRoot": "${workspaceFolder}/src/GreeACLocalServer.UI",
+            "preLaunchTask": "docker-debug-wait"
+        },
+        {
             "name": "Watch",
             "type": "coreclr",
             "request": "launch",
@@ -70,6 +104,14 @@
         }
     ],
     "compounds": [
+        {
+            "name": "Docker: Debug backend + UI",
+            "configurations": [
+                "Docker: Attach to backend",
+                "Docker: Open UI in Chrome"
+            ],
+            "stopAll": true
+        },
         {
             "name": "Debug with Hot Reload",
             "configurations": [

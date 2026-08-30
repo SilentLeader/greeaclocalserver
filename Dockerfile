@@ -35,6 +35,22 @@ COPY src/ ./
 RUN dotnet build GreeACLocalServer.Api/GreeACLocalServer.Api.csproj -c Release --no-restore
 
 # ==============================================================================
+# Stage 2a: Debug stage - SDK image with the .NET debugger (vsdbg) for
+# attaching from VS Code to a running container. Not used by production builds.
+FROM build AS debug
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends unzip procps curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && curl -sSL https://aka.ms/getvsdbgsh | bash /dev/stdin -v latest -l /vsdbg
+WORKDIR /src/GreeACLocalServer.Api
+ENV ASPNETCORE_ENVIRONMENT=Development \
+    DOTNET_ENVIRONMENT=Development \
+    ASPNETCORE_URLS=http://+:5100 \
+    DOTNET_USE_POLLING_FILE_WATCHER=true
+EXPOSE 5000 5100 1813
+ENTRYPOINT ["dotnet", "run", "-c", "Debug", "--no-launch-profile", "--project", "GreeACLocalServer.Api.csproj"]
+
+# ==============================================================================
 # Stage 2: Publish stage - prepare deployment artifacts
 FROM build AS publish
 RUN dotnet publish GreeACLocalServer.Api/GreeACLocalServer.Api.csproj -c Release --no-build -o /app/publish
