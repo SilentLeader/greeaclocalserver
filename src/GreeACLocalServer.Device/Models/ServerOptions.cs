@@ -42,4 +42,14 @@ public class ServerOptions
     /// for old AC firmware. Set to false to require TLS 1.2+.
     /// </summary>
     public bool AllowLegacyTlsProtocols { get; set; } = true;
+
+    /// <summary>
+    /// Directory for raw dumps of connections that are not the GREE JSON line
+    /// protocol (e.g. the binary "fg" frame seen from some newer firmware, or a
+    /// stray TLS ClientHello arriving on a plaintext port). Each dump is a
+    /// timestamped <c>.bin</c> plus a <c>.txt</c> sidecar with metadata.
+    /// Empty / null (default) disables the capture; such connections are still
+    /// logged once and closed cleanly either way.
+    /// </summary>
+    public string? UnknownFrameCapturePath { get; set; }
 }

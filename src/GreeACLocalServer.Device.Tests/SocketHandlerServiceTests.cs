@@ -47,6 +47,18 @@ public class SocketHandlerServiceTests
             => new() { Data = "ok", KeepAlive = false, MacAddress = "abcdef123456" };
     }
 
+    private sealed class RecordingHandler : IMessageHandlerService
+    {
+        private int _calls;
+        public int Calls => Volatile.Read(ref _calls);
+
+        public GreeHandlerResponse GetResponse(string input, bool isTLS = false)
+        {
+            Interlocked.Increment(ref _calls);
+            return new() { Data = "ok", KeepAlive = false };
+        }
+    }
+
     private sealed class StubCryptoService : ICryptoService
     {
         public string Decrypt(string pack, string? key = null) => pack;
@@ -169,6 +181,72 @@ public class SocketHandlerServiceTests
     }
 
     [Fact]
+    public async Task NonJsonConnection_IsDrainedAndClosed_WithoutInvokingHandler()
+    {
+        var options = LoopbackOptions();
+        options.IdleTimeoutSeconds = 2;
+        var handler = new RecordingHandler();
+        var service = CreateService(options, handler);
+
+        service.Start();
+        try
+        {
+            using var client = await ConnectAsync();
+            using var stream = client.GetStream();
+
+            // Binary "fg" frame; the embedded 0x0A must NOT be treated as a boundary.
+            var payload = new byte[] { 0x66, 0x67, 0x01, 0x20, 0x0A, 0x11, 0x22, 0x33 };
+            await stream.WriteAsync(payload);
+            await stream.FlushAsync();
+
+            var read = stream.ReadAsync(new byte[1], 0, 1);
+            var completed = await Task.WhenAny(read, Task.Delay(TimeSpan.FromSeconds(6)));
+
+            Assert.Same(read, completed);
+            Assert.Equal(0, await read); // server closed, nothing written back
+            Assert.Equal(0, handler.Calls);
+        }
+        finally
+        {
+            service.Stop();
+        }
+    }
+
+    [Fact]
+    public async Task NonJsonConnection_WithCapturePathSet_WritesTimestampedDump()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "gree-unknown-" + Guid.NewGuid().ToString("N"));
+        var options = LoopbackOptions();
+        options.IdleTimeoutSeconds = 2;
+        options.UnknownFrameCapturePath = dir;
+        var service = CreateService(options, new RecordingHandler());
+
+        service.Start();
+        try
+        {
+            using var client = await ConnectAsync();
+            using var stream = client.GetStream();
+
+            var payload = new byte[] { 0x66, 0x67, 0x01, 0x20, 0x50, 0x2c, 0xc6, 0x81, 0x76, 0xd6, 0x0A, 0x00, 0x01 };
+            await stream.WriteAsync(payload);
+            await stream.FlushAsync();
+
+            // The dump is written before the server closes the connection.
+            await stream.ReadAsync(new byte[1]).AsTask().WaitAsync(TimeSpan.FromSeconds(6));
+
+            var bins = Directory.Exists(dir) ? Directory.GetFiles(dir, "*.bin") : [];
+            Assert.Single(bins);
+            Assert.Equal(payload, await File.ReadAllBytesAsync(bins[0]));
+            Assert.True(File.Exists(Path.ChangeExtension(bins[0], ".txt")));
+        }
+        finally
+        {
+            service.Stop();
+            try { Directory.Delete(dir, recursive: true); } catch { /* best effort */ }
+        }
+    }
+
+    [Fact]
     public async Task ConcurrentConnections_AreCappedAtConfiguredLimit()
     {
         var options = LoopbackOptions();
@@ -187,7 +265,7 @@ public class SocketHandlerServiceTests
                 held.Add(c);
                 var s = c.GetStream();
                 var w = new StreamWriter(s, new UTF8Encoding(false)) { AutoFlush = true, NewLine = "\n" };
-                await w.WriteLineAsync("hello");
+                await w.WriteLineAsync("{\"t\":\"pack\"}");
                 var buf = new byte[16];
                 var n = await s.ReadAsync(buf).AsTask().WaitAsync(TimeSpan.FromSeconds(5));
                 Assert.True(n > 0);

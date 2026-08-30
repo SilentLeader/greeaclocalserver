@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -281,7 +282,38 @@ internal class SocketHandlerService(
                     ? TimeSpan.FromSeconds(_serverOptions.IdleTimeoutSeconds)
                     : Timeout.InfiniteTimeSpan;
 
-                using (var sReader = new StreamReader(clientStream, Utf8NoBom, detectEncodingFromByteOrderMarks: true, bufferSize: 1024, leaveOpen: true))
+                // GREE devices always open with a '{' JSON line. Some newer firmware
+                // additionally opens a connection carrying a binary "fg" telemetry
+                // frame, and a stray TLS ClientHello can land on a plaintext port.
+                // Peek the first byte so binary is never fed to the line reader - a
+                // 0x0A byte inside a binary frame is not a message boundary.
+                var firstByte = new byte[1];
+                int firstRead;
+                try
+                {
+                    firstRead = await ReadWithIdleTimeoutAsync(clientStream, firstByte, idleTimeout, _cancellationToken);
+                }
+                catch (OperationCanceledException) when (!_cancellationToken.IsCancellationRequested)
+                {
+                    _logger.LogDebug("Client sent no data within {IdleSeconds}s, closing connection", idleTimeout.TotalSeconds);
+                    return;
+                }
+
+                if (firstRead == 0)
+                {
+                    return; // peer closed before sending anything
+                }
+
+                if (firstByte[0] != (byte)'{')
+                {
+                    await HandleUnrecognizedConnectionAsync(
+                        clientStream, firstByte[0], clientIPAddress, localPort, isTLS, idleTimeout);
+                    return;
+                }
+
+                var jsonStream = new PrefixedReadStream(firstByte.AsMemory(0, 1), clientStream);
+
+                using (var sReader = new StreamReader(jsonStream, Utf8NoBom, detectEncodingFromByteOrderMarks: false, bufferSize: 1024, leaveOpen: true))
                 using (var sWriter = new StreamWriter(clientStream, Utf8NoBom, bufferSize: 1024, leaveOpen: true) { AutoFlush = false, NewLine = "\n" })
                 {
                     bool isClientConnected = true;
@@ -352,6 +384,189 @@ internal class SocketHandlerService(
                 connectionLimiter?.Release();
             }
         }
+    }
+
+    /// <summary>
+    /// Reads once from <paramref name="stream"/>, bounding the wait with
+    /// <paramref name="idleTimeout"/> (a linked CTS, because the socket receive
+    /// timeout does not apply to <see cref="Stream.ReadAsync(Memory{byte}, CancellationToken)"/>)
+    /// and with the server shutdown token. An idle timeout surfaces as
+    /// <see cref="OperationCanceledException"/> while <paramref name="shutdownToken"/>
+    /// is not cancelled.
+    /// </summary>
+    private static async Task<int> ReadWithIdleTimeoutAsync(
+        Stream stream, Memory<byte> buffer, TimeSpan idleTimeout, CancellationToken shutdownToken)
+    {
+        using var readCts = CancellationTokenSource.CreateLinkedTokenSource(shutdownToken);
+        if (idleTimeout > TimeSpan.Zero)
+        {
+            readCts.CancelAfter(idleTimeout);
+        }
+
+        return await stream.ReadAsync(buffer, readCts.Token).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Handles a connection whose first byte is not <c>{</c>, i.e. it is not the
+    /// GREE JSON line protocol (a binary "fg" telemetry frame, a misdirected TLS
+    /// ClientHello, ...). The bytes are drained raw - never split on newlines -
+    /// bounded by <see cref="ServerOption.MaxUnknownFrameBytes"/> and a short drain
+    /// window, logged once, and optionally written to
+    /// <see cref="ServerOptions.UnknownFrameCapturePath"/> for offline analysis.
+    /// </summary>
+    private async Task HandleUnrecognizedConnectionAsync(
+        Stream stream,
+        byte firstByte,
+        string? clientIpAddress,
+        int localPort,
+        bool isTls,
+        TimeSpan idleTimeout)
+    {
+        var capturePath = _serverOptions.UnknownFrameCapturePath;
+        var saving = !string.IsNullOrWhiteSpace(capturePath);
+
+        var drainTimeout = TimeSpan.FromSeconds(ServerOption.UnknownFrameDrainSeconds);
+        if (idleTimeout > TimeSpan.Zero && idleTimeout < drainTimeout)
+        {
+            drainTimeout = idleTimeout;
+        }
+
+        // First bytes are always kept for the log line; the full payload only when
+        // it is going to be written to disk.
+        var header = new byte[64];
+        header[0] = firstByte;
+        var headerLen = 1;
+
+        using var full = saving ? new MemoryStream() : null;
+        full?.WriteByte(firstByte);
+
+        long total = 1;
+        var chunk = new byte[4096];
+        try
+        {
+            while (_isRunning && total < ServerOption.MaxUnknownFrameBytes)
+            {
+                int n;
+                try
+                {
+                    n = await ReadWithIdleTimeoutAsync(stream, chunk, drainTimeout, _cancellationToken);
+                }
+                catch (OperationCanceledException) when (!_cancellationToken.IsCancellationRequested)
+                {
+                    break; // no further bytes within the drain window
+                }
+
+                if (n == 0)
+                {
+                    break; // peer closed
+                }
+
+                if (headerLen < header.Length)
+                {
+                    var take = Math.Min(n, header.Length - headerLen);
+                    Array.Copy(chunk, 0, header, headerLen, take);
+                    headerLen += take;
+                }
+
+                if (full is not null)
+                {
+                    var room = ServerOption.MaxUnknownFrameBytes - total;
+                    full.Write(chunk, 0, (int)Math.Min(n, room));
+                }
+
+                total += n;
+            }
+        }
+        catch (IOException)
+        {
+            // Connection reset mid-drain - nothing more to collect.
+        }
+        catch (OperationCanceledException)
+        {
+            // Server shutting down.
+        }
+
+        var headerHex = Convert.ToHexString(header.AsSpan(0, headerLen));
+
+        string? savedFile = null;
+        if (saving && full is not null)
+        {
+            savedFile = await TrySaveUnknownFrameAsync(capturePath!, full.ToArray(), clientIpAddress, localPort, isTls);
+        }
+
+        _logger.LogInformation(
+            "Unrecognized non-JSON connection from {IpAddress} on port {Port} (TLS={IsTls}): {ByteCount} byte(s), header {HeaderHex}{Saved}",
+            clientIpAddress,
+            localPort,
+            isTls,
+            total,
+            headerHex,
+            savedFile is null ? string.Empty : $", saved to {savedFile}");
+    }
+
+    private int _unknownFrameFilesWritten;
+
+    private async Task<string?> TrySaveUnknownFrameAsync(
+        string directory, byte[] payload, string? clientIpAddress, int localPort, bool isTls)
+    {
+        if (Interlocked.Increment(ref _unknownFrameFilesWritten) > ServerOption.MaxUnknownFrameCaptureFiles)
+        {
+            _logger.LogWarning(
+                "Unknown-frame capture limit ({Limit}) reached this run; further payloads are logged but not saved",
+                ServerOption.MaxUnknownFrameCaptureFiles);
+            return null;
+        }
+
+        try
+        {
+            Directory.CreateDirectory(directory);
+
+            var stamp = DateTime.UtcNow.ToString("yyyyMMdd'T'HHmmss'Z'", CultureInfo.InvariantCulture);
+            var ipPart = string.IsNullOrEmpty(clientIpAddress)
+                ? "unknown"
+                : clientIpAddress.Replace(':', '-').Replace('.', '-');
+            var baseName = $"gree-unknown_{stamp}_{ipPart}_{localPort}_{Guid.NewGuid():N}";
+            var binPath = Path.Combine(directory, baseName + ".bin");
+
+            await File.WriteAllBytesAsync(binPath, payload, CancellationToken.None).ConfigureAwait(false);
+
+            var sidecar = new StringBuilder()
+                .Append("received-utc : ").AppendLine(DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture))
+                .Append("remote       : ").AppendLine(clientIpAddress ?? "(unknown)")
+                .Append("local-port   : ").AppendLine(localPort.ToString(CultureInfo.InvariantCulture))
+                .Append("tls          : ").AppendLine(isTls ? "true" : "false")
+                .Append("bytes        : ").AppendLine(payload.Length.ToString(CultureInfo.InvariantCulture))
+                .Append("first-hex    : ").AppendLine(Convert.ToHexString(payload.AsSpan(0, Math.Min(128, payload.Length))));
+            AppendDecodedHeader(sidecar, payload);
+
+            await File.WriteAllTextAsync(Path.Combine(directory, baseName + ".txt"), sidecar.ToString(), CancellationToken.None)
+                .ConfigureAwait(false);
+
+            return binPath;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or NotSupportedException)
+        {
+            _logger.LogWarning(e, "Failed to save unknown-frame capture to {Directory}", directory);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Best-effort decode of the binary "fg" frame header observed on some newer
+    /// firmware: magic <c>66 67</c>, then a 2-byte type, then the device MAC. The
+    /// body is left as opaque (AES-ECB with an as-yet-unknown key). Purely
+    /// informational for the sidecar file.
+    /// </summary>
+    private static void AppendDecodedHeader(StringBuilder sb, byte[] p)
+    {
+        if (p.Length < 10 || p[0] != (byte)'f' || p[1] != (byte)'g')
+        {
+            return;
+        }
+
+        sb.Append("fg-magic     : ").AppendLine("66 67 (\"fg\")");
+        sb.Append("fg-type      : ").AppendLine(Convert.ToHexString(p.AsSpan(2, 2)));
+        sb.Append("fg-mac       : ").AppendLine(Convert.ToHexString(p.AsSpan(4, 6)).ToLowerInvariant());
     }
 
     /// <summary>
