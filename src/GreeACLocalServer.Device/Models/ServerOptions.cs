@@ -23,4 +23,10 @@ public class ServerOptions
     /// Further connections are dropped immediately until a slot frees up.
     /// </summary>
     public int MaxConcurrentConnections { get; set; } = 200;
+
+    /// <summary>
+    /// When true (default) the TLS listener also accepts SSL3 / TLS 1.0 / TLS 1.1
+    /// for old AC firmware. Set to false to require TLS 1.2+.
+    /// </summary>
+    public bool AllowLegacyTlsProtocols { get; set; } = true;
 }

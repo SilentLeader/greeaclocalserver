@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.SignalR.Client;
 using MudBlazor;
 using GreeACLocalServer.Shared.Contracts;
+using GreeACLocalServer.Shared.DTOs;
 using GreeACLocalServer.Shared.ValueObjects;
 using GreeACLocalServer.Shared.Interfaces;
 using GreeACLocalServer.UI.Components;
@@ -11,6 +12,7 @@ namespace GreeACLocalServer.UI.Pages;
 
 public partial class Home(
     IDeviceManagerService _deviceService,
+    IConfigService _configService,
     IDialogService _dialogService,
     NavigationManager _navigation,
     ISnackbar _snackbar) : ComponentBase, IAsyncDisposable
@@ -20,6 +22,7 @@ public partial class Home(
     private List<DeviceDto> _devices = new();
     private HubConnection? _hub;
     private DeviceDetailsDialog? _openDialogComponent;
+    private int _deviceTimeoutMinutes = new ServerConfigResponse().DeviceTimeoutMinutes;
 
     private readonly CancellationTokenSource _cancellationTokenSource = new();
     private CancellationToken _cancellationToken => _cancellationTokenSource.Token;
@@ -28,6 +31,8 @@ public partial class Home(
     {
         try
         {
+            await LoadServerConfig();
+
             // Initialize SignalR connection
             if (!await InitializeSignalRConnection())
             {
@@ -45,6 +50,12 @@ public partial class Home(
         {
             _loading = false;
         }
+    }
+
+    private async Task LoadServerConfig()
+    {
+        var config = await _configService.GetServerConfigAsync(_cancellationToken);
+        _deviceTimeoutMinutes = config.DeviceTimeoutMinutes;
     }
 
     private async Task<bool> InitializeSignalRConnection()
@@ -112,17 +123,14 @@ public partial class Home(
     }
 
     private bool IsDeviceOnline(DeviceDto device)
-    {
-        // Device is considered offline if last connection was more than 10 minutes ago
-        var threshold = DateTime.UtcNow.AddMinutes(-10);
-        return device.LastConnectionTimeUtc > threshold;
-    }
+        => DeviceHelpers.IsDeviceOnline(device, _deviceTimeoutMinutes);
 
     private async Task ShowDeviceDetails(DeviceDto device)
     {
         var parameters = new DialogParameters
         {
             { "Device", device },
+            { "DeviceTimeoutMinutes", _deviceTimeoutMinutes },
             { "OnDialogCreated", new Action<DeviceDetailsDialog>(dialog =>
                 {
                     _openDialogComponent = dialog;
@@ -162,7 +170,7 @@ public partial class Home(
             }
             else
             {
-                _snackbar.Add($"Device removed (${device.MacAddress}).", Severity.Success);
+                _snackbar.Add($"Device removed ({device.MacAddress}).", Severity.Success);
             }
         }
     }
