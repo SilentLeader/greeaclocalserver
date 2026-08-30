@@ -134,6 +134,9 @@ internal class SocketHandlerService(
         if (_serverOptions.TLSEnabled)
         {
             _logger.LogInformation("TLS Port for AC Devices: {TLS_PORT}", ServerOption.TLS_PORT);
+            _logger.LogInformation(
+                "TLS protocols: {Protocols}",
+                _serverOptions.AllowLegacyTlsProtocols ? "legacy (SSL3-TLS1.3)" : "TLS1.2+");
         }
     }
 
@@ -253,22 +256,12 @@ internal class SocketHandlerService(
                 {
                     sslStream = new SslStream(clientStream, false, ValidateCertificate);
 
-                    // Support legacy ssl protocols
-#pragma warning disable CS0618 // Type or member is obsolete
-#pragma warning disable SYSLIB0039 // Type or member is obsolete
-
                     var authOptions = new SslServerAuthenticationOptions
                     {
                         ServerCertificate = _tlsCertificate!,
                         ClientCertificateRequired = false,
-                        EnabledSslProtocols = SslProtocols.Ssl3 |
-                                              SslProtocols.Tls |
-                                              SslProtocols.Tls11 |
-                                              SslProtocols.Tls12 |
-                                              SslProtocols.Tls13
+                        EnabledSslProtocols = ResolveProtocols(_serverOptions.AllowLegacyTlsProtocols)
                     };
-#pragma warning restore SYSLIB0039 // Type or member is obsolete
-#pragma warning restore CS0618 // Type or member is obsolete
 
                     await sslStream.AuthenticateAsServerAsync(authOptions, _cancellationToken);
                     _logger.LogDebug("TLS handshake completed successfully");
@@ -350,6 +343,27 @@ internal class SocketHandlerService(
                 connectionLimiter?.Release();
             }
         }
+    }
+
+    /// <summary>
+    /// Resolves the enabled TLS protocol set for the device listener. When
+    /// <paramref name="allowLegacy"/> is true the legacy SSL3 / TLS 1.0 / TLS 1.1
+    /// protocols are included for old AC firmware; otherwise only TLS 1.2 / 1.3.
+    /// </summary>
+    internal static SslProtocols ResolveProtocols(bool allowLegacy)
+    {
+        if (!allowLegacy)
+        {
+            return SslProtocols.Tls12 | SslProtocols.Tls13;
+        }
+
+#pragma warning disable CS0618, SYSLIB0039 // legacy protocols are intentionally opt-in
+        return SslProtocols.Ssl3
+             | SslProtocols.Tls
+             | SslProtocols.Tls11
+             | SslProtocols.Tls12
+             | SslProtocols.Tls13;
+#pragma warning restore CS0618, SYSLIB0039
     }
 
     private bool ValidateCertificate(
