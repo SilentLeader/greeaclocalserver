@@ -1,3 +1,4 @@
+using GreeACLocalServer.Device.ValueObjects;
 
 namespace GreeACLocalServer.Device.Models;
 
@@ -8,6 +9,18 @@ public class ServerOptions
 
 
     public bool TLSEnabled { get; set; } = false;
+
+    /// <summary>
+    /// Plaintext TCP ports the device listener binds. GREE firmware revisions
+    /// differ: most use 5000, some connect to 1812, so both are bound by default.
+    /// </summary>
+    public List<int> TcpPorts { get; set; } = [ServerOption.PORT, ServerOption.ALT_PORT];
+
+    /// <summary>
+    /// TCP port for the TLS device listener (only bound when <see cref="TLSEnabled"/>
+    /// is true). External implementations use 1813; adjust per firmware.
+    /// </summary>
+    public int TlsPort { get; set; } = ServerOption.TLS_PORT;
 
     public List<string> ListenIPAddresses { get; set; } = [];
 
