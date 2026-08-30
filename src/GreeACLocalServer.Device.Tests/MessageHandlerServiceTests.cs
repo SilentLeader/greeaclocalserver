@@ -143,8 +143,8 @@ public class MessageHandlerServiceTests
 
         using var doc = JsonDocument.Parse(response.Data);
         var time = doc.RootElement.GetProperty("time").GetString();
-        // Format left unchanged by WP-03/F10 (date and time not separated).
-        Assert.Matches(new Regex(@"^\d{4}-\d{2}-\d{2}\d{2}:\d{2}:\d{2}$"), time!);
+        // Space-separated "yyyy-MM-dd HH:mm:ss", matching the referenced implementations.
+        Assert.Matches(new Regex(@"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$"), time!);
     }
 
     [Fact]
