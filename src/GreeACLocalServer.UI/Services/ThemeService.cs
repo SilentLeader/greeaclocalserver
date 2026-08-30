@@ -93,10 +93,13 @@ public class ThemeService(
             {
                 // Get system preference
                 _isDarkMode = await _mudThemeProvider.GetSystemDarkModeAsync();
-
-                // Watch for system changes
-                await _mudThemeProvider.WatchSystemDarkModeAsync(OnSystemThemeChanged);
             }
+
+            // Always watch for system changes: ToggleTheme can switch back to auto
+            // mode during the session. OnSystemThemeChanged is a no-op unless we are
+            // in auto mode, so this has no effect while a preference is set.
+            await _mudThemeProvider.WatchSystemDarkModeAsync(OnSystemThemeChanged);
+
             _themeChangedCallback?.Invoke();
         }
         catch (Exception ex)
@@ -114,6 +117,25 @@ public class ThemeService(
         {
             _isDarkMode = isDark;
             _themeChangedCallback?.Invoke();
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is not null)
+        {
+            try
+            {
+                await _module.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+                // The circuit is already gone; nothing to clean up on the JS side.
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to dispose the theme service JS module");
+            }
         }
     }
 }

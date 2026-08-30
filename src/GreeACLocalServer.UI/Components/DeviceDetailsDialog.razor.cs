@@ -1,4 +1,5 @@
 using GreeACLocalServer.Shared.Contracts;
+using GreeACLocalServer.UI.Helpers;
 using Microsoft.AspNetCore.Components;
 using MudBlazor;
 
@@ -14,7 +15,13 @@ public partial class DeviceDetailsDialog : ComponentBase, IDisposable
 
     [Parameter] public Action? OnDialogClosed { get; set; }
 
-    private bool IsOnline => Device.LastConnectionTimeUtc > DateTime.UtcNow.AddMinutes(-10);
+    /// <summary>
+    /// The "online" timeout window in minutes, sourced from the server config and
+    /// passed in by <see cref="Pages.Home"/> so it is not fetched twice over HTTP.
+    /// </summary>
+    [Parameter] public int DeviceTimeoutMinutes { get; set; } = new Shared.DTOs.ServerConfigResponse().DeviceTimeoutMinutes;
+
+    private bool IsOnline => DeviceHelpers.IsDeviceOnline(Device, DeviceTimeoutMinutes);
 
     protected override void OnInitialized()
     {
