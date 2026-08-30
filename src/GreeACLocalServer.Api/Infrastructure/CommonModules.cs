@@ -10,6 +10,7 @@ internal static class CommonModules
 
         // Core services needed in both scenarios            
         return services.AddGreeServices(configuration)
+            .AddMemoryCache(options => options.SizeLimit = 4096)
             .AddSingleton<IDnsResolverService, DnsResolverService>()
             .AddScoped<IDeviceConfigService, DeviceConfigService>()
             .AddScoped<IConfigService, ConfigService>()

@@ -1,4 +1,5 @@
 using Xunit;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using GreeACLocalServer.Api.Services;
 using Moq;
@@ -7,51 +8,74 @@ namespace GreeACLocalServer.Api.Tests;
 
 public class DnsResolverServiceTests
 {
-    private DnsResolverService CreateService()
+    private static DnsResolverService CreateService(Func<string, Task<string?>>? reverseLookup = null)
     {
         var logger = Mock.Of<ILogger<DnsResolverService>>();
-        return new DnsResolverService(logger);
+        var cache = new MemoryCache(new MemoryCacheOptions());
+        return new DnsResolverService(logger, cache, reverseLookup);
     }
 
     [Fact]
     public async Task ResolveDnsNameAsync_ReturnsHostnameForValidIp()
     {
-        // Arrange
-        var service = CreateService();
-        
-        // Act - Use localhost which should always resolve
-        var result = await service.ResolveDnsNameAsync("127.0.0.1");
-        
-        // Assert - Should return either a hostname or fall back to IP
-        Assert.NotNull(result);
-        Assert.NotEmpty(result);
-        // Result should be either a hostname or the IP address itself
-        Assert.True(result == "127.0.0.1" || result.Contains("localhost") || result.Contains('.'));
+        var service = CreateService(_ => Task.FromResult<string?>("host.example.local"));
+
+        var result = await service.ResolveDnsNameAsync("192.168.1.10");
+
+        Assert.Equal("host.example.local", result);
     }
 
     [Fact]
     public async Task ResolveDnsNameAsync_ReturnsIpForInvalidIp()
     {
-        // Arrange
         var service = CreateService();
-        
-        // Act
+
         var result = await service.ResolveDnsNameAsync("invalid-ip");
-        
-        // Assert
+
         Assert.Equal("invalid-ip", result);
     }
 
     [Fact]
-    public async Task ResolveDnsNameAsync_ReturnsIpForUnresolvableIp()
+    public async Task ResolveDnsNameAsync_ReturnsIpWhenLookupFails()
     {
-        // Arrange
-        var service = CreateService();
-        
-        // Act - Use a private IP that likely won't resolve
+        var service = CreateService(_ => throw new InvalidOperationException("boom"));
+
         var result = await service.ResolveDnsNameAsync("192.168.255.254");
-        
-        // Assert - Should fall back to IP address
+
         Assert.Equal("192.168.255.254", result);
+    }
+
+    [Fact]
+    public async Task ResolveDnsNameAsync_CachesSuccessfulLookup()
+    {
+        var calls = 0;
+        var service = CreateService(_ =>
+        {
+            calls++;
+            return Task.FromResult<string?>("host.example.local");
+        });
+
+        var first = await service.ResolveDnsNameAsync("192.168.1.10");
+        var second = await service.ResolveDnsNameAsync("192.168.1.10");
+
+        Assert.Equal("host.example.local", first);
+        Assert.Equal("host.example.local", second);
+        Assert.Equal(1, calls);
+    }
+
+    [Fact]
+    public async Task ResolveDnsNameAsync_CachesFailedLookup()
+    {
+        var calls = 0;
+        var service = CreateService(_ =>
+        {
+            calls++;
+            return Task.FromResult<string?>(null);
+        });
+
+        await service.ResolveDnsNameAsync("192.168.1.10");
+        await service.ResolveDnsNameAsync("192.168.1.10");
+
+        Assert.Equal(1, calls);
     }
 }
