@@ -24,4 +24,10 @@ public record DeviceDto(
     /// the update check is disabled or has not completed yet.
     /// </summary>
     public bool? UpdateAvailable { get; init; }
+
+    /// <summary>
+    /// Last successfully polled operating state (power / mode / setpoint / unit);
+    /// null when it has never been read or the most recent poll failed.
+    /// </summary>
+    public AcRuntimeStateDto? RuntimeState { get; init; }
 }

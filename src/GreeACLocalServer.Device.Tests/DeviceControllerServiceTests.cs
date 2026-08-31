@@ -52,10 +52,25 @@ public sealed class DeviceControllerServiceTests
         private readonly Task _loop;
 
         private readonly string _statusHid;
+        private int _scanCount;
+        private int _statusFailuresRemaining;
 
-        public UdpDeviceStub(string statusHost, string statusName, bool reply = true, string statusHid = "362001065736+U-QCOM4004CV3.76.bin")
+        /// <summary>Number of <c>scan</c> datagrams answered so far (a fresh scan → bind handshake bumps this).</summary>
+        public int ScanCount => Volatile.Read(ref _scanCount);
+
+        public UdpDeviceStub(
+            string statusHost,
+            string statusName,
+            bool reply = true,
+            string statusHid = "362001065736+U-QCOM4004CV3.76.bin",
+            int statusPow = 1,
+            int statusMod = 1,
+            int statusSetTem = 24,
+            int statusTemUn = 0,
+            int statusFailures = 0)
         {
             _statusHid = statusHid;
+            _statusFailuresRemaining = statusFailures;
             _loop = Task.Run(async () =>
             {
                 while (!_cts.IsCancellationRequested)
@@ -79,6 +94,11 @@ public sealed class DeviceControllerServiceTests
                     using var doc = JsonDocument.Parse(request);
                     var type = doc.RootElement.GetProperty("t").GetString();
 
+                    if (type == "scan")
+                    {
+                        Interlocked.Increment(ref _scanCount);
+                    }
+
                     string inner = type switch
                     {
                         "scan" => JsonSerializer.Serialize(new { mac = Mac }),
@@ -89,13 +109,23 @@ public sealed class DeviceControllerServiceTests
 
                     string BuildStatusReply(string innerJson)
                     {
+                        if (Interlocked.Decrement(ref _statusFailuresRemaining) >= 0)
+                        {
+                            // Simulate a stale-key / corrupt exchange: an undeserializable pack body.
+                            return "}}} not json {{{";
+                        }
+
                         using var innerDoc = JsonDocument.Parse(innerJson);
                         var cols = innerDoc.RootElement.GetProperty("cols").EnumerateArray().Select(c => c.GetString()).ToArray();
-                        var dat = cols.Select(c => c switch
+                        var dat = cols.Select(object (c) => c switch
                         {
                             "host" => statusHost,
                             "name" => statusName,
                             "hid" => _statusHid,
+                            "Pow" => statusPow,
+                            "Mod" => statusMod,
+                            "SetTem" => statusSetTem,
+                            "TemUn" => statusTemUn,
                             _ => string.Empty,
                         }).ToArray();
                         return JsonSerializer.Serialize(new { t = "ok", r = 200, cols, dat });
@@ -188,5 +218,65 @@ public sealed class DeviceControllerServiceTests
         Assert.False(result.IsSuccess);
         // Caller cancellation is not retryable: it must not sit through the 3x3s timeout loop.
         Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(3), $"took {stopwatch.Elapsed}");
+    }
+
+    [Fact]
+    public async Task GetDeviceRuntimeState_HappyPath_ParsesAllColumns()
+    {
+        using var stub = new UdpDeviceStub("h", "n", statusPow: 1, statusMod: 4, statusSetTem: 22, statusTemUn: 1);
+
+        var result = await CreateService().GetDeviceRuntimeStateAsync(
+            new GetDeviceStatusRequest("127.0.0.1"), CancellationToken.None);
+
+        Assert.True(result.IsSuccess, result.Message);
+        Assert.Equal(true, result.Power);
+        Assert.Equal(4, result.Mode);
+        Assert.Equal(22, result.TargetTemperature);
+        Assert.Equal(1, result.TemperatureUnit);
+        Assert.Equal(Mac, result.MacAddress);
+        Assert.Equal(1, stub.ScanCount);
+    }
+
+    [Fact]
+    public async Task GetDeviceRuntimeState_SecondCall_ReusesCachedBind()
+    {
+        using var stub = new UdpDeviceStub("h", "n", statusPow: 0, statusMod: 1);
+        var service = CreateService();
+
+        var first = await service.GetDeviceRuntimeStateAsync(new GetDeviceStatusRequest("127.0.0.1"), CancellationToken.None);
+        var second = await service.GetDeviceRuntimeStateAsync(new GetDeviceStatusRequest("127.0.0.1"), CancellationToken.None);
+
+        Assert.True(first.IsSuccess, first.Message);
+        Assert.True(second.IsSuccess, second.Message);
+        Assert.Equal(false, second.Power);
+        // Only the first call performed scan → bind; the second reused the cached key.
+        Assert.Equal(1, stub.ScanCount);
+    }
+
+    [Fact]
+    public async Task GetDeviceRuntimeState_CachedBindRejected_RebindsAndRetries()
+    {
+        // First call: fresh scan+bind, then a corrupt status reply -> fails (not from cache, no retry).
+        // Second call: cached key, corrupt status reply -> invalidate, re-bind, valid reply -> succeeds.
+        using var stub = new UdpDeviceStub("h", "n", statusFailures: 2);
+        var service = CreateService();
+
+        var first = await service.GetDeviceRuntimeStateAsync(new GetDeviceStatusRequest("127.0.0.1"), CancellationToken.None);
+        var second = await service.GetDeviceRuntimeStateAsync(new GetDeviceStatusRequest("127.0.0.1"), CancellationToken.None);
+
+        Assert.False(first.IsSuccess);
+        Assert.True(second.IsSuccess, second.Message);
+        Assert.Equal(2, stub.ScanCount);
+    }
+
+    [Fact]
+    public async Task GetDeviceRuntimeState_DeviceSilent_Fails()
+    {
+        using var stub = new UdpDeviceStub("h", "n", reply: false);
+
+        var result = await CreateService().GetDeviceRuntimeStateAsync(
+            new GetDeviceStatusRequest("127.0.0.1"), CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
     }
 }

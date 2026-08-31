@@ -6,6 +6,7 @@ global using GreeACLocalServer.Api.Services;
 global using GreeACLocalServer.Shared.Contracts;
 global using GreeACLocalServer.Shared.DTOs;
 global using GreeACLocalServer.Shared.Interfaces;
+global using GreeACLocalServer.Shared.ValueObjects;
 
 global using GreeACLocalServer.UI.Services;
 

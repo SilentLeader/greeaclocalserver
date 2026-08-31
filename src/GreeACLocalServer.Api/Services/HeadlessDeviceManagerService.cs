@@ -122,6 +122,100 @@ public class HeadlessDeviceManagerService(
     }
 
     /// <summary>
+    /// Re-queries the device's operating state over the local network. On success
+    /// the new reading is stamped onto the device state and (when it actually
+    /// changed) pushed to clients; on failure any previously known state is
+    /// cleared and the clear is pushed once.
+    /// </summary>
+    public virtual async Task<DeviceDto?> RefreshRuntimeStateAsync(string macAddress, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(macAddress) || !_deviceStates.TryGetValue(macAddress, out var current))
+        {
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(current.IpAddress))
+        {
+            return null;
+        }
+
+        DeviceRuntimeStateResult? result = null;
+        try
+        {
+            result = await _deviceController.GetDeviceRuntimeStateAsync(new GetDeviceStatusRequest(current.IpAddress), cancellationToken);
+        }
+        catch
+        {
+            // Treated the same as a failed query below: the state is cleared.
+        }
+
+        var reading = ToRuntimeState(result);
+
+        var (updated, changed) = StampRuntimeState(macAddress, reading);
+        if (updated is null)
+        {
+            return null;
+        }
+
+        if (changed)
+        {
+            await OnDeviceUpdatedAsync(updated);
+        }
+
+        return reading is null ? null : await ProjectAsync(updated, allowRemoteFetch: false, cancellationToken);
+    }
+
+    /// <summary>MAC addresses whose last connection was within <paramref name="window"/>.</summary>
+    public IReadOnlyCollection<string> GetRecentlyConnectedMacs(TimeSpan window)
+    {
+        var cutoff = DateTime.UtcNow - window;
+        return _deviceStates.Values
+            .Where(s => s.LastConnectionTime >= cutoff)
+            .Select(s => s.MacAddress)
+            .ToList();
+    }
+
+    private static AcRuntimeState? ToRuntimeState(DeviceRuntimeStateResult? result)
+    {
+        if (result is null || !result.IsSuccess
+            || result.Power is not { } power
+            || result.Mode is not { } mode
+            || result.TargetTemperature is not { } setTemp)
+        {
+            return null;
+        }
+
+        return new AcRuntimeState(
+            power,
+            Enum.IsDefined(typeof(AcMode), mode) ? (AcMode)mode : AcMode.Unknown,
+            setTemp,
+            result.TemperatureUnit == 1 ? AcTemperatureUnit.Fahrenheit : AcTemperatureUnit.Celsius,
+            DateTime.UtcNow);
+    }
+
+    /// <summary>
+    /// Writes <paramref name="reading"/> (or a clear when null) onto the device
+    /// state via a compare-exchange loop that never resurrects a removed device.
+    /// Returns the new state and whether clients need to be notified.
+    /// </summary>
+    private (AcDeviceState? State, bool Changed) StampRuntimeState(string macAddress, AcRuntimeState? reading)
+    {
+        while (_deviceStates.TryGetValue(macAddress, out var existing))
+        {
+            var previous = existing.RuntimeState;
+            var changed = reading is null ? previous is not null : !reading.SameReadingAs(previous);
+            var next = existing with { RuntimeState = reading };
+
+            if (_deviceStates.TryUpdate(macAddress, next, existing))
+            {
+                return (next, changed);
+            }
+        }
+
+        return (null, false);
+    }
+
+    /// <summary>
     /// Records that a firmware query was attempted now (throttles the opportunistic
     /// background refresh even when the device is unreachable).
     /// </summary>
@@ -252,7 +346,10 @@ public class HeadlessDeviceManagerService(
         state.Endpoints.Select(e => new DeviceEndpointDto(e.Port, e.IsTls, e.LastSeenUtc)).ToList())
     {
         FirmwareVersion = state.FirmwareVersion,
-        FirmwareCode = state.FirmwareCode
+        FirmwareCode = state.FirmwareCode,
+        RuntimeState = state.RuntimeState is { } rs
+            ? new AcRuntimeStateDto(rs.Power, rs.Mode, rs.TargetTemperature, rs.TemperatureUnit, rs.QueriedUtc)
+            : null
     };
 
     /// <summary>

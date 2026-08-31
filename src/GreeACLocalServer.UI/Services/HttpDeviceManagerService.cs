@@ -66,6 +66,27 @@ public class HttpDeviceManagerService(HttpClient httpClient) : IDeviceManagerSer
         }
     }
 
+    public async Task<DeviceDto?> RefreshRuntimeStateAsync(string macAddress, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(macAddress))
+        {
+            return null;
+        }
+        try
+        {
+            var response = await _http.PostAsync($"api/devices/{Uri.EscapeDataString(macAddress)}/refresh-state", content: null, cancellationToken).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+            {
+                return null;
+            }
+            return await response.Content.ReadFromJsonAsync<DeviceDto>(cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     public async Task<bool> RemoveDeviceAsync(string macAddress, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(macAddress)) 

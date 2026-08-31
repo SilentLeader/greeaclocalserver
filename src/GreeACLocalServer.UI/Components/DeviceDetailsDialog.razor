@@ -44,6 +44,48 @@
                 </MudItem>
 
                 <MudItem xs="12">
+                    <div class="d-flex align-center mt-4">
+                        <MudText Typo="Typo.h6" GutterBottom="true" Class="flex-grow-1">State</MudText>
+                        @if (_refreshingState)
+                        {
+                            <MudProgressCircular Indeterminate="true" Size="Size.Small" />
+                        }
+                        else
+                        {
+                            <MudTooltip Text="Query the current operating state from the device">
+                                <MudIconButton Icon="@Icons.Material.Filled.Refresh" Size="Size.Small"
+                                               OnClick="RefreshState" aria-label="Refresh state" />
+                            </MudTooltip>
+                        }
+                    </div>
+                    <MudDivider Class="mb-3" />
+                    @if (Device.RuntimeState is { } state)
+                    {
+                        <div class="d-flex align-center gap-4">
+                            <MudTooltip Text="@AcStateHelpers.PowerLabel(state.Power)">
+                                <MudIcon Icon="@AcStateHelpers.PowerIcon(state.Power)"
+                                         Color="@AcStateHelpers.PowerColor(state.Power)" Size="Size.Large" />
+                            </MudTooltip>
+                            <MudTooltip Text="@AcStateHelpers.ModeLabel(state.Mode)">
+                                <MudIcon Icon="@AcStateHelpers.ModeIcon(state.Mode)"
+                                         Color="@(state.Power ? Color.Primary : Color.Default)" Size="Size.Large" />
+                            </MudTooltip>
+                            <MudText Typo="Typo.h4">@AcStateHelpers.FormatSetpoint(state)</MudText>
+                        </div>
+                        <MudText Typo="Typo.body2" Class="mt-1">
+                            @AcStateHelpers.PowerLabel(state.Power) · @AcStateHelpers.ModeLabel(state.Mode)
+                        </MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                            updated @state.QueriedUtc.ToLocalTime().ToString("G")
+                        </MudText>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">No state data yet.</MudText>
+                    }
+                </MudItem>
+
+                <MudItem xs="12">
                     <MudText Typo="Typo.h6" GutterBottom="true" Class="mt-4">Firmware</MudText>
                     <MudDivider Class="mb-3" />
                     <div class="d-flex align-center">
