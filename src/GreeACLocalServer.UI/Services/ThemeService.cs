@@ -27,11 +27,33 @@ public class ThemeService(
     {
         PaletteLight = new PaletteLight()
         {
-            Primary = Colors.Blue.Default,
+            Primary = "#0D9488",
+            Success = "#0D9488",
+            Background = "#EEF7F7",
+            Surface = "#FFFFFF",
+            AppbarBackground = "#FFFFFF",
+            AppbarText = "#0F2733",
+            DrawerBackground = "#FFFFFF",
+            LinesDefault = "rgba(13,148,136,0.28)",
         },
         PaletteDark = new PaletteDark()
         {
-            Primary = Colors.Blue.Darken3
+            Primary = "#2DD4BF",
+            Success = "#34E0B0",
+            Background = "#0A1420",
+            BackgroundGray = "#0D1B2A",
+            Surface = "#101F2E",
+            AppbarBackground = "#0D1B2A",
+            AppbarText = "#E7F6F4",
+            DrawerBackground = "#0A1420",
+            TextPrimary = "#E7F6F4",
+            TextSecondary = "#7FA3AB",
+            LinesDefault = "rgba(45,212,191,0.28)",
+            Divider = "rgba(255,255,255,0.08)",
+        },
+        LayoutProperties = new LayoutProperties()
+        {
+            DefaultBorderRadius = "16px"
         }
     };
 

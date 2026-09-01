@@ -5,10 +5,20 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <base href="/" />
+    <script>
+        (function () {
+            var saved = localStorage.getItem('IsDarkTheme');
+            var isDark = saved !== null ? saved === 'True' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+            if (!isDark) document.documentElement.classList.add('gac-light');
+        })();
+    </script>
     <link rel="stylesheet" href="@Assets["lib/bootstrap/dist/css/bootstrap.min.css"]" />
     <link rel="stylesheet" href="@Assets["app.css"]" />
     <link rel="stylesheet" href="@Assets["GreeACLocalServer.UI.styles.css"]" />
     <link href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap" rel="stylesheet" />
+    <link
+    href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block"
+    rel="stylesheet" />
     <link href="@Assets["_content/MudBlazor/MudBlazor.min.css"]" rel="stylesheet" />
     <ImportMap />
     <link rel="icon" type="image/svg+xml" href="icons/favicon.svg" />
@@ -23,10 +33,20 @@
 
 <body>
     <div id="app-loader" class="loading-container">
-        <svg class="loading-progress">
-            <circle r="40%" cx="50%" cy="50%" />
-            <circle r="40%" cx="50%" cy="50%" />
-        </svg>
+        <div class="gac-loader-glow"></div>
+        <div class="gac-loader-brand">
+            <span class="gac-loader-brand-icon">
+                <span class="material-symbols-outlined">ac_unit</span>
+            </span>
+            <span class="gac-loader-brand-text">GREE AC Local Server</span>
+        </div>
+        <div class="gac-loader-ring-wrap">
+            <svg class="loading-progress">
+                <circle r="40%" cx="50%" cy="50%" />
+                <circle r="40%" cx="50%" cy="50%" />
+            </svg>
+            <span class="gac-loader-fan-pos"><span class="material-symbols-outlined gac-loader-fan">mode_fan</span></span>
+        </div>
         <div class="loading-progress-text"></div>
     </div>
 
@@ -35,7 +55,7 @@
     <script src="scripts/blazor_extensions.js"></script>
     <script src="_framework/blazor.web.js" autostart="false"></script>
     <script src="scripts/blazor_loader.js"></script>
-    
+
 </body>
 
 </html>

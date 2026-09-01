@@ -21,27 +21,30 @@ main {
     align-items: center;
 }
 
-    .top-row ::deep a, .top-row ::deep .btn-link {
-        white-space: nowrap;
-        margin-left: 1.5rem;
-        text-decoration: none;
-    }
+.top-row ::deep a,
+.top-row ::deep .btn-link {
+    white-space: nowrap;
+    margin-left: 1.5rem;
+    text-decoration: none;
+}
 
-    .top-row ::deep a:hover, .top-row ::deep .btn-link:hover {
-        text-decoration: underline;
-    }
+.top-row ::deep a:hover,
+.top-row ::deep .btn-link:hover {
+    text-decoration: underline;
+}
 
-    .top-row ::deep a:first-child {
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
+.top-row ::deep a:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
 
 @media (max-width: 640.98px) {
     .top-row {
         justify-content: space-between;
     }
 
-    .top-row ::deep a, .top-row ::deep .btn-link {
+    .top-row ::deep a,
+    .top-row ::deep .btn-link {
         margin-left: 0;
     }
 }
@@ -70,7 +73,8 @@ main {
         width: 0;
     }
 
-    .top-row, article {
+    .top-row,
+    article {
         padding-left: 2rem !important;
         padding-right: 1.5rem !important;
     }
@@ -90,9 +94,57 @@ main {
     z-index: 1000;
 }
 
-    #blazor-error-ui .dismiss {
-        cursor: pointer;
-        position: absolute;
-        right: 0.75rem;
-        top: 0.5rem;
+#blazor-error-ui .dismiss {
+    cursor: pointer;
+    position: absolute;
+    right: 0.75rem;
+    top: 0.5rem;
+}
+
+.gac-bg-glow {
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.08;
+    pointer-events: none;
+    z-index: 0;
+    background: var(--mud-palette-primary);
+}
+
+.gac-bg-glow-1 {
+    top: -120px;
+    left: 10%;
+    width: 420px;
+    height: 420px;
+    animation: gac-drift 18s ease-in-out infinite;
+}
+
+.gac-bg-glow-2 {
+    top: 300px;
+    right: 5%;
+    width: 320px;
+    height: 320px;
+    opacity: 0.06;
+    animation: gac-drift 22s ease-in-out infinite reverse;
+}
+
+@keyframes gac-drift {
+    0%, 100% {
+        transform: translate(0, 0);
     }
+
+    50% {
+        transform: translate(30px, -20px);
+    }
+}
+
+.gac-app-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--mud-palette-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 12px rgba(45, 212, 191, 0.45);
+}

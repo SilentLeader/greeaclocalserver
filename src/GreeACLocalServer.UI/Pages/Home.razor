@@ -23,48 +23,50 @@ else if (_devices.Count == 0)
 }
 else
 {
-    <MudGrid>
+    <MudGrid id="device-grid">
         @foreach (var device in _devices.OrderBy(x => x.DNSName))
         {
             var isOnline = IsDeviceOnline(device);
             <MudItem xs="12" sm="6" md="4" lg="3" @key="device.MacAddress">
-                <MudCard Elevation="3" Class="mud-height-full">
+                <MudCard Elevation="3" Class="mud-height-full gac-device-card">
                     <MudCardContent>
                         <div class="d-flex justify-space-between align-center mb-2">
-                            <MudIcon Icon="@Icons.Material.Filled.Air" Color="Color.Primary" Size="Size.Large" />
-                            <MudText Typo="Typo.caption" Color="@(isOnline? Color.Success: Color.Error)"
-                                     Class="font-weight-bold">
-                                ● @(isOnline ? "Online" : "Offline")
+                            <MudText Typo="Typo.h6">@device.DNSName</MudText>
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small"
+                                           title="Remove Device" OnClick="() => RemoveDevice(device)" />
+                        </div>
+                        <div class="d-flex align-center mb-3">
+                            <span class="gac-status-dot @(isOnline ? "gac-status-online" : "gac-status-offline")"></span>
+                            <MudText Typo="Typo.caption" Color="@(isOnline ? Color.Success : Color.Error)"
+                                     Class="font-weight-bold ml-1">
+                                @(isOnline ? "Online" : "Offline")
                             </MudText>
                         </div>
-                        <MudText Typo="Typo.h6" Class="mb-1">@device.DNSName</MudText>
+
+                        <div class="gac-fan-wrap @(isOnline && (device.RuntimeState?.Power ?? false) ? "gac-fan-active" : "")">
+                            <div class="gac-fan-glow"></div>
+                            <div class="gac-fan-ring-outer"></div>
+                            <div class="gac-fan-ring-inner"></div>
+                            <span class="material-symbols-outlined gac-fan-icon">mode_fan</span>
+                        </div>
+                        @if (device.RuntimeState is { } state)
+                        {
+                            <MudText Typo="Typo.caption" Class="d-flex justify-center mb-3 mud-text-secondary">
+                                @AcStateHelpers.ModeTooltip(state)
+                            </MudText>
+                        }
+
                         <MudDivider Class="mb-2" />
                         <div class="d-flex align-center">
                             <MudIcon Icon="@Icons.Material.Filled.Memory" Size="Size.Small" Class="mr-2" />
                             <MudText Typo="Typo.body2">@DeviceHelpers.FormatMacAddress(device.MacAddress)</MudText>
                         </div>
-                        @if (device.RuntimeState is { } state)
-                        {
-                            <div class="d-flex align-center mt-2">
-                                <MudTooltip Text="@AcStateHelpers.PowerLabel(state.Power)">
-                                    <MudIcon Icon="@AcStateHelpers.PowerIcon(state.Power)"
-                                             Color="@AcStateHelpers.PowerColor(state.Power)" Size="Size.Small" Class="mr-2" />
-                                </MudTooltip>
-                                <MudTooltip Text="@AcStateHelpers.ModeTooltip(state)">
-                                    <MudIcon Icon="@AcStateHelpers.ModeIcon(state.Mode)"
-                                             Color="@(state.Power ? Color.Primary : Color.Default)" Size="Size.Small" />
-                                </MudTooltip>
-                            </div>
-                        }
                     </MudCardContent>
                     <MudCardActions>
                         <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Info" Color="Color.Primary"
                                    Size="Size.Small" OnClick="() => ShowDeviceDetails(device)">
                             Details
                         </MudButton>
-                        <MudSpacer />
-                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small"
-                                       title="Remove Device" OnClick="() => RemoveDevice(device)" />
                     </MudCardActions>
                 </MudCard>
             </MudItem>

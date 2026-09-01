@@ -7,11 +7,15 @@
 <MudSnackbarProvider />
 
 <MudLayout>
+    <div class="gac-bg-glow gac-bg-glow-1"></div>
+    <div class="gac-bg-glow gac-bg-glow-2"></div>
     <MudAppBar Elevation="1">
         <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start"
                        OnClick="@((e) => ToggleDrawer())" />
         <MudSpacer />
-        <MudImage Src="icons/favicon.svg" Width="32" Height="32" Alt="App icon" class="mr-2"></MudImage>
+        <div class="gac-app-icon mr-2">
+            <MudIcon Icon="@Icons.Material.Filled.AcUnit" Style="color:#ffffff;" Size="Size.Small" />
+        </div>
         <MudText Typo="Typo.h6">GREE AC Local Server</MudText>
         <MudSpacer />
         <MudIconButton
