@@ -130,7 +130,7 @@ internal class DeviceControllerService(
             {
                 _logger.LogDebug("Querying device runtime state for IP {IpAddress}", operation.IpAddress);
 
-                var command = new QueryStatusCommand(["Pow", "Mod", "SetTem", "TemUn"]);
+                var command = new QueryStatusCommand(["Pow", "Mod", "SetTem", "TemUn", "TemSen"]);
                 var (scan, result) = await SendPackWithBindAsync<QueryResponse, QueryStatusCommand>(operation.IpAddress, command, cancellationToken);
 
                 if (!scan.IsSuccess || string.IsNullOrWhiteSpace(scan.CryptoKey))
@@ -151,6 +151,7 @@ internal class DeviceControllerService(
                 var mode = ParseInt(values, "Mod");
                 var setTemp = ParseInt(values, "SetTem");
                 var tempUnit = ParseInt(values, "TemUn");
+                var currentTempRaw = ParseInt(values, "TemSen");
 
                 if (power is null || mode is null || setTemp is null)
                 {
@@ -159,12 +160,12 @@ internal class DeviceControllerService(
                     return new DeviceRuntimeStateResult(false, "Device did not report the expected status columns", "INCOMPLETE_STATUS");
                 }
 
-                _logger.LogDebug("Runtime state retrieved: Pow={Power} Mod={Mode} SetTem={SetTem} TemUn={TemUn}",
-                    power, mode, setTemp, tempUnit);
+                _logger.LogDebug("Runtime state retrieved: Pow={Power} Mod={Mode} SetTem={SetTem} TemUn={TemUn} TemSen={TemSen}",
+                    power, mode, setTemp, tempUnit, currentTempRaw);
 
                 return new DeviceRuntimeStateResult(true, string.Empty,
                     power: power, mode: mode, targetTemperature: setTemp, temperatureUnit: tempUnit,
-                    macAddress: scan.MacAddress);
+                    currentTemperatureRaw: currentTempRaw, macAddress: scan.MacAddress);
             }
             catch (Exception ex)
             {

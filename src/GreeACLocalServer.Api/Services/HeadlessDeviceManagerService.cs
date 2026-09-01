@@ -190,7 +190,24 @@ public class HeadlessDeviceManagerService(
             Enum.IsDefined(typeof(AcMode), mode) ? (AcMode)mode : AcMode.Unknown,
             setTemp,
             result.TemperatureUnit == 1 ? AcTemperatureUnit.Fahrenheit : AcTemperatureUnit.Celsius,
-            DateTime.UtcNow);
+            DateTime.UtcNow,
+            AdjustCurrentTemperature(result.CurrentTemperatureRaw));
+    }
+
+    /// <summary>
+    /// Turns the raw <c>TemSen</c> reading into whole degrees Celsius: strips the
+    /// +40 offset and rejects anything outside a plausible indoor range (devices
+    /// without a sensor report 0 or a nonsense value).
+    /// </summary>
+    private static int? AdjustCurrentTemperature(int? raw)
+    {
+        if (raw is not { } value || value == 0)
+        {
+            return null;
+        }
+
+        var celsius = value - 40;
+        return celsius is >= -40 and <= 60 ? celsius : null;
     }
 
     /// <summary>
@@ -348,7 +365,7 @@ public class HeadlessDeviceManagerService(
         FirmwareVersion = state.FirmwareVersion,
         FirmwareCode = state.FirmwareCode,
         RuntimeState = state.RuntimeState is { } rs
-            ? new AcRuntimeStateDto(rs.Power, rs.Mode, rs.TargetTemperature, rs.TemperatureUnit, rs.QueriedUtc)
+            ? new AcRuntimeStateDto(rs.Power, rs.Mode, rs.TargetTemperature, rs.TemperatureUnit, rs.QueriedUtc, rs.CurrentTemperature)
             : null
     };
 

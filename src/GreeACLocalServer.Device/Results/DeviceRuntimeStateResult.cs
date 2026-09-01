@@ -13,6 +13,7 @@ public class DeviceRuntimeStateResult(
     int? mode = null,
     int? targetTemperature = null,
     int? temperatureUnit = null,
+    int? currentTemperatureRaw = null,
     string? macAddress = null) : ResultBase(success, message, errorCode)
 {
     /// <summary>Raw <c>Pow</c>: <c>true</c> when the unit is switched on.</summary>
@@ -26,6 +27,12 @@ public class DeviceRuntimeStateResult(
 
     /// <summary>Raw <c>TemUn</c>: 0=Celsius, 1=Fahrenheit.</summary>
     public int? TemperatureUnit { get; } = temperatureUnit;
+
+    /// <summary>
+    /// Raw <c>TemSen</c> indoor sensor reading (Celsius, carries a +40 offset;
+    /// null when the device did not report the column). Not all firmware supports it.
+    /// </summary>
+    public int? CurrentTemperatureRaw { get; } = currentTemperatureRaw;
 
     public string? MacAddress { get; } = macAddress;
 }

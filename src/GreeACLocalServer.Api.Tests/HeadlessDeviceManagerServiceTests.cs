@@ -302,7 +302,7 @@ public class HeadlessDeviceManagerServiceTests
         var mac = "AA:BB:CC:DD:EE:FF";
         await _deviceManagerService.UpdateOrAddAsync(mac, "192.168.1.100");
         SetupRuntimeState(new DeviceRuntimeStateResult(true, string.Empty,
-            power: true, mode: 1, targetTemperature: 23, temperatureUnit: 0, macAddress: mac));
+            power: true, mode: 1, targetTemperature: 23, temperatureUnit: 0, currentTemperatureRaw: 65, macAddress: mac));
 
         var refreshed = await _deviceManagerService.RefreshRuntimeStateAsync(mac);
 
@@ -311,6 +311,7 @@ public class HeadlessDeviceManagerServiceTests
         Assert.Equal(AcMode.Cool, refreshed.RuntimeState.Mode);
         Assert.Equal(23, refreshed.RuntimeState.TargetTemperature);
         Assert.Equal(AcTemperatureUnit.Celsius, refreshed.RuntimeState.TemperatureUnit);
+        Assert.Equal(25, refreshed.RuntimeState.CurrentTemperature);
 
         var reloaded = await _deviceManagerService.GetAsync(mac);
         Assert.Equal(AcMode.Cool, reloaded!.RuntimeState!.Mode);
@@ -328,6 +329,23 @@ public class HeadlessDeviceManagerServiceTests
 
         Assert.Equal(AcMode.Unknown, refreshed!.RuntimeState!.Mode);
         Assert.Equal(AcTemperatureUnit.Fahrenheit, refreshed.RuntimeState.TemperatureUnit);
+    }
+
+    [Theory]
+    [InlineData(65, 25)]     // raw carries a +40 offset
+    [InlineData(60, 20)]
+    [InlineData(0, null)]    // devices without a sensor report 0
+    [InlineData(178, null)]  // implausible (seen on some U Crown units) -> rejected
+    public async Task RefreshRuntimeStateAsync_CurrentTemperature_OffsetAndRangeChecked(int raw, int? expected)
+    {
+        var mac = "AA:BB:CC:DD:EE:FF";
+        await _deviceManagerService.UpdateOrAddAsync(mac, "192.168.1.100");
+        SetupRuntimeState(new DeviceRuntimeStateResult(true, string.Empty,
+            power: true, mode: 1, targetTemperature: 23, temperatureUnit: 0, currentTemperatureRaw: raw, macAddress: mac));
+
+        var refreshed = await _deviceManagerService.RefreshRuntimeStateAsync(mac);
+
+        Assert.Equal(expected, refreshed!.RuntimeState!.CurrentTemperature);
     }
 
     [Fact]

@@ -56,7 +56,8 @@ namespace GreeACLocalServer.Api.Models
         AcMode Mode,
         int TargetTemperature,
         AcTemperatureUnit TemperatureUnit,
-        DateTime QueriedUtc)
+        DateTime QueriedUtc,
+        int? CurrentTemperature = null)
     {
         /// <summary>True when this state carries the same values as <paramref name="other"/>, ignoring the timestamp.</summary>
         public bool SameReadingAs(AcRuntimeState? other) =>
@@ -64,6 +65,7 @@ namespace GreeACLocalServer.Api.Models
             && Power == other.Power
             && Mode == other.Mode
             && TargetTemperature == other.TargetTemperature
-            && TemperatureUnit == other.TemperatureUnit;
+            && TemperatureUnit == other.TemperatureUnit
+            && CurrentTemperature == other.CurrentTemperature;
     }
 }

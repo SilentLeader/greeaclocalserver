@@ -67,6 +67,7 @@ public sealed class DeviceControllerServiceTests
             int statusMod = 1,
             int statusSetTem = 24,
             int statusTemUn = 0,
+            int statusTemSen = 65,
             int statusFailures = 0)
         {
             _statusHid = statusHid;
@@ -126,6 +127,7 @@ public sealed class DeviceControllerServiceTests
                             "Mod" => statusMod,
                             "SetTem" => statusSetTem,
                             "TemUn" => statusTemUn,
+                            "TemSen" => statusTemSen,
                             _ => string.Empty,
                         }).ToArray();
                         return JsonSerializer.Serialize(new { t = "ok", r = 200, cols, dat });
@@ -223,7 +225,7 @@ public sealed class DeviceControllerServiceTests
     [Fact]
     public async Task GetDeviceRuntimeState_HappyPath_ParsesAllColumns()
     {
-        using var stub = new UdpDeviceStub("h", "n", statusPow: 1, statusMod: 4, statusSetTem: 22, statusTemUn: 1);
+        using var stub = new UdpDeviceStub("h", "n", statusPow: 1, statusMod: 4, statusSetTem: 22, statusTemUn: 1, statusTemSen: 66);
 
         var result = await CreateService().GetDeviceRuntimeStateAsync(
             new GetDeviceStatusRequest("127.0.0.1"), CancellationToken.None);
@@ -233,6 +235,7 @@ public sealed class DeviceControllerServiceTests
         Assert.Equal(4, result.Mode);
         Assert.Equal(22, result.TargetTemperature);
         Assert.Equal(1, result.TemperatureUnit);
+        Assert.Equal(66, result.CurrentTemperatureRaw);
         Assert.Equal(Mac, result.MacAddress);
         Assert.Equal(1, stub.ScanCount);
     }

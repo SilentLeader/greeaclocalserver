@@ -45,7 +45,16 @@ public static class AcStateHelpers
         return $"{state.TargetTemperature}°{unit}";
     }
 
-    /// <summary>Tooltip text for the mode icon: "Cool · 24°C".</summary>
+    /// <summary>Measured indoor temperature, e.g. <c>26°C</c>; empty when unavailable.</summary>
+    public static string FormatCurrent(AcRuntimeStateDto state)
+        => state.CurrentTemperature is { } c ? $"{c}°C" : string.Empty;
+
+    /// <summary>
+    /// Tooltip text for the mode icon. Without a sensor reading: "Cool · 24°C".
+    /// With one: "Cool · set 24°C · now 26°C".
+    /// </summary>
     public static string ModeTooltip(AcRuntimeStateDto state)
-        => $"{ModeLabel(state.Mode)} · {FormatSetpoint(state)}";
+        => state.CurrentTemperature is { } c
+            ? $"{ModeLabel(state.Mode)} · set {FormatSetpoint(state)} · now {c}°C"
+            : $"{ModeLabel(state.Mode)} · {FormatSetpoint(state)}";
 }
