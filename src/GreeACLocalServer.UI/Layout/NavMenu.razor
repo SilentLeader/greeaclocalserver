@@ -1,12 +1,33 @@
-﻿<MudNavMenu>
-    <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="Icons.Material.Filled.Home">
-        Devices
-    </MudNavLink>
-    <MudNavLink Href="/device-config" Match="NavLinkMatch.Prefix" Icon="Icons.Material.Filled.Settings">
-        Device Configuration
-    </MudNavLink>
-    <MudNavLink Href="/wifi-config" Match="NavLinkMatch.Prefix" Icon="Icons.Material.Filled.Wifi">
-        WiFi Configuration
-    </MudNavLink>
-</MudNavMenu>
+<div class="gac-nav">
+    <div class="gac-nav-item @(IsActive("/") ? "gac-nav-active" : "")" @onclick="@(() => Navigate("/"))">
+        <MudIcon Icon="@Icons.Material.Filled.Home" Size="Size.Small" Color="@(IsActive("/") ? Color.Primary : Color.Default)" />
+        <span>Devices</span>
+    </div>
+    <div class="gac-nav-item @(IsActive("/device-config") ? "gac-nav-active" : "")" @onclick="@(() => Navigate("/device-config"))">
+        <MudIcon Icon="@Icons.Material.Filled.Settings" Size="Size.Small" Color="@(IsActive("/device-config") ? Color.Primary : Color.Default)" />
+        <span>Device Configuration</span>
+    </div>
+    <div class="gac-nav-item @(IsActive("/wifi-config") ? "gac-nav-active" : "")" @onclick="@(() => Navigate("/wifi-config"))">
+        <MudIcon Icon="@Icons.Material.Filled.Wifi" Size="Size.Small" Color="@(IsActive("/wifi-config") ? Color.Primary : Color.Default)" />
+        <span>WiFi Configuration</span>
+    </div>
+</div>
 
+@implements IDisposable
+@code {
+    [Inject] private NavigationManager Navigation { get; set; } = default!;
+
+    protected override void OnInitialized() => Navigation.LocationChanged += OnLocationChanged;
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e) => InvokeAsync(StateHasChanged);
+
+    private bool IsActive(string href)
+    {
+        var path = "/" + Navigation.ToBaseRelativePath(Navigation.Uri).TrimEnd('/');
+        return href == "/" ? path == "/" : path.StartsWith(href, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void Navigate(string href) => Navigation.NavigateTo(href);
+
+    public void Dispose() => Navigation.LocationChanged -= OnLocationChanged;
+}

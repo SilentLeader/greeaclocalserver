@@ -7,6 +7,7 @@ using GreeACLocalServer.Shared.ValueObjects;
 using GreeACLocalServer.Shared.Interfaces;
 using GreeACLocalServer.UI.Components;
 using GreeACLocalServer.UI.Helpers;
+using Microsoft.JSInterop;
 
 namespace GreeACLocalServer.UI.Pages;
 
@@ -15,8 +16,10 @@ public partial class Home(
     IConfigService _configService,
     IDialogService _dialogService,
     NavigationManager _navigation,
-    ISnackbar _snackbar) : ComponentBase, IAsyncDisposable
+    ISnackbar _snackbar,
+    IJSRuntime _jsRuntime) : ComponentBase, IAsyncDisposable
 {
+    private IJSObjectReference? _tiltModule;
     private bool _loading = true;
     private string? _error;
     private List<DeviceDto> _devices = new();
@@ -49,6 +52,18 @@ public partial class Home(
         finally
         {
             _loading = false;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _tiltModule = await _jsRuntime.InvokeAsync<IJSObjectReference>("import", "./scripts/devicetilt.module.js");
+        }
+        if (_tiltModule is not null && !_loading && _devices.Count > 0)
+        {
+            await _tiltModule.InvokeVoidAsync("attach", "device-grid");
         }
     }
 
@@ -205,6 +220,11 @@ public partial class Home(
         if (_hub is not null)
         {
             await _hub.DisposeAsync();
+        }
+        if (_tiltModule is not null)
+        {
+            try { await _tiltModule.DisposeAsync(); }
+            catch (JSDisconnectedException) { }
         }
         await _cancellationTokenSource.CancelAsync();
         _cancellationTokenSource.Dispose();
