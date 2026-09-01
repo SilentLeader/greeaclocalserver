@@ -17,4 +17,12 @@ public interface IDeviceManagerService
     /// unknown or the query fails.
     /// </summary>
     Task<DeviceDto?> RefreshFirmwareAsync(string macAddress, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Re-queries the device's operating state (power / mode / setpoint / unit)
+    /// over the local network and returns the refreshed device state. Returns
+    /// <c>null</c> when the device is unknown or the query fails (which also
+    /// clears any previously known state).
+    /// </summary>
+    Task<DeviceDto?> RefreshRuntimeStateAsync(string macAddress, CancellationToken cancellationToken = default);
 }

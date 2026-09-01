@@ -11,6 +11,9 @@ internal static class WebModules
             // UI-enabled DeviceManagerService with SignalR support
             .AddSingleton<IInternalDeviceManagerService, DeviceManagerService>()
             .AddSingleton<IDeviceManagerService>(x => x.GetRequiredService<IInternalDeviceManagerService>())
+            // Runtime-state poll — UI mode only
+            .Configure<AcRuntimeStateOptions>(configuration.GetSection("GreeServer:RuntimeStatePolling"))
+            .AddHostedService<AcRuntimeStatePollingService>()
             .AddScoped<ILocalStorageService, LocalStorageService>()
             .AddScoped<IThemeService, ThemeService>()
             // Web-specific services

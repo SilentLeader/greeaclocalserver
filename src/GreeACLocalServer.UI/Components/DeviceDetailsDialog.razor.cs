@@ -16,6 +16,8 @@ public partial class DeviceDetailsDialog : ComponentBase, IDisposable
 
     private bool _refreshingFirmware;
 
+    private bool _refreshingState;
+
     [Parameter] public DeviceDto Device { get; set; } = default!;
 
     [Parameter] public Action<DeviceDetailsDialog>? OnDialogCreated { get; set; }
@@ -105,6 +107,39 @@ public partial class DeviceDetailsDialog : ComponentBase, IDisposable
         finally
         {
             _refreshingFirmware = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task RefreshState()
+    {
+        if (_refreshingState || Device is null)
+        {
+            return;
+        }
+
+        _refreshingState = true;
+        StateHasChanged();
+        try
+        {
+            var updated = await DeviceManager.RefreshRuntimeStateAsync(Device.MacAddress);
+            if (updated is not null)
+            {
+                Device = updated;
+                Snackbar.Add("Operating state refreshed", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("Could not read the operating state from the device", Severity.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"State refresh failed: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _refreshingState = false;
             StateHasChanged();
         }
     }

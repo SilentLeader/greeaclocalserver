@@ -35,8 +35,37 @@ namespace GreeACLocalServer.Api.Models
         /// refresh so an unreachable device is not re-probed on every reconnect.
         /// </summary>
         public DateTime? FirmwareRefreshAttemptedUtc { get; init; }
+
+        /// <summary>
+        /// Last successfully polled operating state. Null when never polled or the
+        /// most recent poll failed (a failed poll clears it).
+        /// </summary>
+        public AcRuntimeState? RuntimeState { get; init; }
     }
 
     /// <summary>A single observed (port, TLS) connection endpoint with its last-seen time.</summary>
     public record DeviceEndpoint(int Port, bool IsTls, DateTime LastSeenUtc);
+
+    /// <summary>
+    /// Snapshot of an AC's operating state as read over outbound UDP. Value
+    /// equality (excluding <see cref="QueriedUtc"/>) is used to suppress redundant
+    /// SignalR pushes when a poll returns an unchanged state.
+    /// </summary>
+    public record AcRuntimeState(
+        bool Power,
+        AcMode Mode,
+        int TargetTemperature,
+        AcTemperatureUnit TemperatureUnit,
+        DateTime QueriedUtc,
+        int? CurrentTemperature = null)
+    {
+        /// <summary>True when this state carries the same values as <paramref name="other"/>, ignoring the timestamp.</summary>
+        public bool SameReadingAs(AcRuntimeState? other) =>
+            other is not null
+            && Power == other.Power
+            && Mode == other.Mode
+            && TargetTemperature == other.TargetTemperature
+            && TemperatureUnit == other.TemperatureUnit
+            && CurrentTemperature == other.CurrentTemperature;
+    }
 }

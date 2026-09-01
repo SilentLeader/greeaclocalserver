@@ -4,6 +4,8 @@ using GreeACLocalServer.Device.Requests;
 using GreeACLocalServer.Device.Responses;
 using GreeACLocalServer.Device.Results;
 using Microsoft.Extensions.Logging;
+using System.Collections.Concurrent;
+using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -21,6 +23,20 @@ internal class DeviceControllerService(
     private readonly ILogger<DeviceControllerService> _logger = logger;
     private readonly ICryptoService _cryptoService = cryptoService;
 
+    /// <summary>
+    /// Per-IP cache of the <c>scan → bind</c> result (MAC + device crypto key) so
+    /// the recurring runtime-state poll and the firmware probe do not repeat the
+    /// full handshake every time. Entries expire after <see cref="BindCacheTtl"/>
+    /// and are dropped immediately when the device rejects the cached key.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, CachedBind> _bindCache = new();
+
+    private static readonly TimeSpan BindCacheTtl = TimeSpan.FromMinutes(30);
+
+    private sealed record CachedBind(string MacAddress, string CryptoKey, DateTime CachedUtc);
+
+    private readonly record struct BindResolution(ScanResult Scan, bool FromCache);
+
     public async Task<DeviceStatusResult> GetDeviceStatusAsync(GetDeviceStatusRequest operation, CancellationToken cancellationToken = default)
     {
         var operationId = $"DEV-{Guid.NewGuid().ToString("N")[..8]}";
@@ -31,27 +47,26 @@ internal class DeviceControllerService(
             {
                 _logger.LogDebug("Querying device status for IP {IpAddress}", operation.IpAddress);
 
-                var scanResult = await ScanDeviceAsync(operation.IpAddress, cancellationToken);
-                if (!scanResult.IsSuccess || string.IsNullOrWhiteSpace(scanResult.CryptoKey))
-                {
-                    _logger.LogWarning("Scan failed: {ErrorCode} - {Message}", scanResult.ErrorCode, scanResult.Message);
-                    return new DeviceStatusResult(false, scanResult.Message, scanResult.ErrorCode);
-                }
-
                 var command = new QueryStatusCommand(["host", "name"]);
-                var result = await SendPackCommandAsync<QueryResponse, QueryStatusCommand>(operation.IpAddress, scanResult.MacAddress!, scanResult.CryptoKey, command, 0, cancellationToken);
+                var (scan, result) = await SendPackWithBindAsync<QueryResponse, QueryStatusCommand>(operation.IpAddress, command, cancellationToken);
+
+                if (!scan.IsSuccess || string.IsNullOrWhiteSpace(scan.CryptoKey))
+                {
+                    _logger.LogWarning("Scan failed: {ErrorCode} - {Message}", scan.ErrorCode, scan.Message);
+                    return new DeviceStatusResult(false, scan.Message, scan.ErrorCode);
+                }
 
                 if (result.IsSuccess
                     && result.ResponseData != null
                     && result.ResponseData.ParameterValues.Count == command.ParameterNames.Count
                     && command.ParameterNames.SequenceEqual(result.ResponseData.ParameterNames))
                 {
-                    var hostName = result.ResponseData.ParameterValues[0];
-                    var deviceName = result.ResponseData.ParameterValues[1];
+                    var hostName = result.ResponseData.ValueAsText(0);
+                    var deviceName = result.ResponseData.ValueAsText(1);
 
                     _logger.LogDebug("Device status retrieved: Name={DeviceName}, Host={HostName}", deviceName, hostName);
 
-                    return new DeviceStatusResult(true, string.Empty, deviceName: deviceName, remoteHost: hostName, macAddress: scanResult.MacAddress);
+                    return new DeviceStatusResult(true, string.Empty, deviceName: deviceName, remoteHost: hostName, macAddress: scan.MacAddress);
                 }
 
                 _logger.LogWarning("Query failed: {ErrorCode} - {Message}", result.ErrorCode, result.Message);
@@ -75,24 +90,23 @@ internal class DeviceControllerService(
             {
                 _logger.LogDebug("Querying device firmware for IP {IpAddress}", operation.IpAddress);
 
-                var scanResult = await ScanDeviceAsync(operation.IpAddress, cancellationToken);
-                if (!scanResult.IsSuccess || string.IsNullOrWhiteSpace(scanResult.CryptoKey))
+                var command = new QueryStatusCommand(["hid"]);
+                var (scan, result) = await SendPackWithBindAsync<QueryResponse, QueryStatusCommand>(operation.IpAddress, command, cancellationToken);
+
+                if (!scan.IsSuccess || string.IsNullOrWhiteSpace(scan.CryptoKey))
                 {
                     // Best-effort: the opportunistic background refresh calls this on
                     // every device, so an unreachable device must not log at warning.
-                    _logger.LogDebug("Firmware scan failed: {ErrorCode} - {Message}", scanResult.ErrorCode, scanResult.Message);
-                    return new DeviceFirmwareResult(false, scanResult.Message, scanResult.ErrorCode);
+                    _logger.LogDebug("Firmware scan failed: {ErrorCode} - {Message}", scan.ErrorCode, scan.Message);
+                    return new DeviceFirmwareResult(false, scan.Message, scan.ErrorCode);
                 }
 
-                var command = new QueryStatusCommand(["hid"]);
-                var result = await SendPackCommandAsync<QueryResponse, QueryStatusCommand>(operation.IpAddress, scanResult.MacAddress!, scanResult.CryptoKey, command, 0, cancellationToken);
-
-                var hid = result.IsSuccess ? result.ResponseData?.ParameterValues.FirstOrDefault() : null;
+                var hid = result.IsSuccess ? result.ResponseData?.ValueAsText(0) : null;
                 if (result.IsSuccess && !string.IsNullOrWhiteSpace(hid))
                 {
                     FirmwareInfo.TryParse(hid, out var code, out var version);
                     _logger.LogDebug("Device firmware retrieved: Version={Version}, Code={Code}", version, code);
-                    return new DeviceFirmwareResult(true, string.Empty, hid: hid, firmwareVersion: version, firmwareCode: code, macAddress: scanResult.MacAddress);
+                    return new DeviceFirmwareResult(true, string.Empty, hid: hid, firmwareVersion: version, firmwareCode: code, macAddress: scan.MacAddress);
                 }
 
                 _logger.LogDebug("Firmware query failed: {ErrorCode} - {Message}", result.ErrorCode, result.Message);
@@ -102,6 +116,61 @@ internal class DeviceControllerService(
             {
                 _logger.LogWarning(ex, "Error querying device firmware for IP {IpAddress}", operation.IpAddress);
                 return new DeviceFirmwareResult(false, $"Failed to query device firmware: {ex.Message}", "QUERY_ERROR");
+            }
+        }
+    }
+
+    public async Task<DeviceRuntimeStateResult> GetDeviceRuntimeStateAsync(GetDeviceStatusRequest operation, CancellationToken cancellationToken = default)
+    {
+        var operationId = $"DEV-{Guid.NewGuid().ToString("N")[..8]}";
+
+        using (LogContext.PushProperty("OperationId", operationId))
+        {
+            try
+            {
+                _logger.LogDebug("Querying device runtime state for IP {IpAddress}", operation.IpAddress);
+
+                var command = new QueryStatusCommand(["Pow", "Mod", "SetTem", "TemUn", "TemSen"]);
+                var (scan, result) = await SendPackWithBindAsync<QueryResponse, QueryStatusCommand>(operation.IpAddress, command, cancellationToken);
+
+                if (!scan.IsSuccess || string.IsNullOrWhiteSpace(scan.CryptoKey))
+                {
+                    _logger.LogDebug("Runtime-state scan failed: {ErrorCode} - {Message}", scan.ErrorCode, scan.Message);
+                    return new DeviceRuntimeStateResult(false, scan.Message, scan.ErrorCode);
+                }
+
+                if (!result.IsSuccess || result.ResponseData is null)
+                {
+                    _logger.LogDebug("Runtime-state query failed: {ErrorCode} - {Message}", result.ErrorCode, result.Message);
+                    return new DeviceRuntimeStateResult(false, result.Message, result.ErrorCode ?? "QUERY_FAILED");
+                }
+
+                var values = ZipColumns(result.ResponseData.ParameterNames, result.ResponseData);
+
+                var power = ParseBool(values, "Pow");
+                var mode = ParseInt(values, "Mod");
+                var setTemp = ParseInt(values, "SetTem");
+                var tempUnit = ParseInt(values, "TemUn");
+                var currentTempRaw = ParseInt(values, "TemSen");
+
+                if (power is null || mode is null || setTemp is null)
+                {
+                    _logger.LogDebug("Runtime-state response missing expected columns (got {Cols})",
+                        string.Join(",", result.ResponseData.ParameterNames));
+                    return new DeviceRuntimeStateResult(false, "Device did not report the expected status columns", "INCOMPLETE_STATUS");
+                }
+
+                _logger.LogDebug("Runtime state retrieved: Pow={Power} Mod={Mode} SetTem={SetTem} TemUn={TemUn} TemSen={TemSen}",
+                    power, mode, setTemp, tempUnit, currentTempRaw);
+
+                return new DeviceRuntimeStateResult(true, string.Empty,
+                    power: power, mode: mode, targetTemperature: setTemp, temperatureUnit: tempUnit,
+                    currentTemperatureRaw: currentTempRaw, macAddress: scan.MacAddress);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error querying device runtime state for IP {IpAddress}", operation.IpAddress);
+                return new DeviceRuntimeStateResult(false, $"Failed to query device runtime state: {ex.Message}", "QUERY_ERROR");
             }
         }
     }
@@ -116,14 +185,13 @@ internal class DeviceControllerService(
             {
                 _logger.LogDebug("Setting device name for IP {IpAddress} to {DeviceName}", operation.IpAddress, operation.DeviceName);
 
-                var scanResult = await ScanDeviceAsync(operation.IpAddress, cancellationToken);
-                if (!scanResult.IsSuccess)
-                {
-                    return new SimpleDeviceOperationResult(false, scanResult.Message, scanResult.ErrorCode);
-                }
-
                 var command = new ParameterCommand(["name"], [operation.DeviceName]);
-                var result = await SendPackCommandAsync<ParameterResponse, ParameterCommand>(operation.IpAddress, scanResult.MacAddress!, scanResult.CryptoKey!, command, 0, cancellationToken);
+                var (scan, result) = await SendPackWithBindAsync<ParameterResponse, ParameterCommand>(operation.IpAddress, command, cancellationToken);
+
+                if (!scan.IsSuccess)
+                {
+                    return new SimpleDeviceOperationResult(false, scan.Message, scan.ErrorCode);
+                }
 
                 if (result.IsSuccess && result.ResponseData?.ResultCode == (int)HttpStatusCode.OK)
                 {
@@ -151,14 +219,13 @@ internal class DeviceControllerService(
             {
                 _logger.LogDebug("Setting remote host for IP {IpAddress} to {RemoteHost}", operation.IpAddress, operation.RemoteHost);
 
-                var scanResult = await ScanDeviceAsync(operation.IpAddress, cancellationToken);
-                if (!scanResult.IsSuccess)
-                {
-                    return new SimpleDeviceOperationResult(false, scanResult.Message, scanResult.ErrorCode);
-                }
-
                 var command = new ParameterCommand(["host"], [operation.RemoteHost]);
-                var result = await SendPackCommandAsync<ParameterResponse, ParameterCommand>(operation.IpAddress, scanResult.MacAddress!, scanResult.CryptoKey!, command, 0, cancellationToken);
+                var (scan, result) = await SendPackWithBindAsync<ParameterResponse, ParameterCommand>(operation.IpAddress, command, cancellationToken);
+
+                if (!scan.IsSuccess)
+                {
+                    return new SimpleDeviceOperationResult(false, scan.Message, scan.ErrorCode);
+                }
 
                 if (result.IsSuccess && result.ResponseData?.ResultCode == (int)HttpStatusCode.OK)
                 {
@@ -175,6 +242,91 @@ internal class DeviceControllerService(
             }
         }
     }
+
+    /// <summary>
+    /// Resolves the device MAC + crypto key for <paramref name="ipAddress"/>,
+    /// serving a cached <c>scan → bind</c> result when one is fresh. The returned
+    /// <see cref="BindResolution.FromCache"/> flag lets the caller retry once with
+    /// a forced re-bind if the cached key turns out to be stale.
+    /// </summary>
+    private async Task<BindResolution> ResolveBindAsync(string ipAddress, bool forceRefresh, CancellationToken cancellationToken)
+    {
+        if (!forceRefresh
+            && _bindCache.TryGetValue(ipAddress, out var cached)
+            && DateTime.UtcNow - cached.CachedUtc < BindCacheTtl)
+        {
+            _logger.LogDebug("Using cached bind key for IP {IpAddress} MAC {MacAddress}", ipAddress, cached.MacAddress);
+            return new BindResolution(
+                new ScanResult(true, "Using cached bind key", null, cached.MacAddress, cached.CryptoKey),
+                FromCache: true);
+        }
+
+        var scan = await ScanDeviceAsync(ipAddress, cancellationToken);
+        if (scan.IsSuccess && !string.IsNullOrWhiteSpace(scan.MacAddress) && !string.IsNullOrWhiteSpace(scan.CryptoKey))
+        {
+            _bindCache[ipAddress] = new CachedBind(scan.MacAddress!, scan.CryptoKey!, DateTime.UtcNow);
+        }
+
+        return new BindResolution(scan, FromCache: false);
+    }
+
+    private void InvalidateBind(string ipAddress) => _bindCache.TryRemove(ipAddress, out _);
+
+    /// <summary>
+    /// Sends a pack command using a (possibly cached) bind key. If the command
+    /// fails and the key came from the cache, the entry is dropped and the command
+    /// is retried once against a fresh <c>scan → bind</c> handshake.
+    /// </summary>
+    private async Task<(ScanResult Scan, PackCommandResult<TResponse> Result)> SendPackWithBindAsync<TResponse, TCommand>(
+        string ipAddress, TCommand command, CancellationToken cancellationToken)
+        where TCommand : class
+    {
+        var bind = await ResolveBindAsync(ipAddress, forceRefresh: false, cancellationToken);
+        if (!bind.Scan.IsSuccess || string.IsNullOrWhiteSpace(bind.Scan.CryptoKey))
+        {
+            return (bind.Scan, new PackCommandResult<TResponse>(false, bind.Scan.Message, bind.Scan.ErrorCode));
+        }
+
+        var result = await SendPackCommandAsync<TResponse, TCommand>(
+            ipAddress, bind.Scan.MacAddress!, bind.Scan.CryptoKey, command, 0, cancellationToken);
+
+        if (result.IsSuccess || !bind.FromCache)
+        {
+            return (bind.Scan, result);
+        }
+
+        _logger.LogDebug("Cached bind key for IP {IpAddress} was rejected; re-binding and retrying once", ipAddress);
+        InvalidateBind(ipAddress);
+
+        var fresh = await ResolveBindAsync(ipAddress, forceRefresh: true, cancellationToken);
+        if (!fresh.Scan.IsSuccess || string.IsNullOrWhiteSpace(fresh.Scan.CryptoKey))
+        {
+            return (fresh.Scan, new PackCommandResult<TResponse>(false, fresh.Scan.Message, fresh.Scan.ErrorCode));
+        }
+
+        result = await SendPackCommandAsync<TResponse, TCommand>(
+            ipAddress, fresh.Scan.MacAddress!, fresh.Scan.CryptoKey, command, 0, cancellationToken);
+        return (fresh.Scan, result);
+    }
+
+    private static Dictionary<string, string?> ZipColumns(IReadOnlyList<string> names, QueryResponse response)
+    {
+        var map = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        for (var i = 0; i < names.Count; i++)
+        {
+            map[names[i]] = response.ValueAsText(i);
+        }
+        return map;
+    }
+
+    private static int? ParseInt(IReadOnlyDictionary<string, string?> values, string key)
+        => values.TryGetValue(key, out var raw)
+            && int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
+            ? value
+            : null;
+
+    private static bool? ParseBool(IReadOnlyDictionary<string, string?> values, string key)
+        => ParseInt(values, key) is { } value ? value != 0 : null;
 
     private async Task<ScanResult> ScanDeviceAsync(string ipAddress, CancellationToken cancellationToken)
     {

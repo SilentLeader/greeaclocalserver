@@ -43,6 +43,19 @@ else
                             <MudIcon Icon="@Icons.Material.Filled.Memory" Size="Size.Small" Class="mr-2" />
                             <MudText Typo="Typo.body2">@DeviceHelpers.FormatMacAddress(device.MacAddress)</MudText>
                         </div>
+                        @if (device.RuntimeState is { } state)
+                        {
+                            <div class="d-flex align-center mt-2">
+                                <MudTooltip Text="@AcStateHelpers.PowerLabel(state.Power)">
+                                    <MudIcon Icon="@AcStateHelpers.PowerIcon(state.Power)"
+                                             Color="@AcStateHelpers.PowerColor(state.Power)" Size="Size.Small" Class="mr-2" />
+                                </MudTooltip>
+                                <MudTooltip Text="@AcStateHelpers.ModeTooltip(state)">
+                                    <MudIcon Icon="@AcStateHelpers.ModeIcon(state.Mode)"
+                                             Color="@(state.Power ? Color.Primary : Color.Default)" Size="Size.Small" />
+                                </MudTooltip>
+                            </div>
+                        }
                     </MudCardContent>
                     <MudCardActions>
                         <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Info" Color="Color.Primary"

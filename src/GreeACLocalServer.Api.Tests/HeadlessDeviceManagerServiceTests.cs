@@ -11,6 +11,8 @@ using GreeACLocalServer.Api.Services;
 using GreeACLocalServer.Device.Interfaces;
 using GreeACLocalServer.Device.Requests;
 using GreeACLocalServer.Device.Results;
+using GreeACLocalServer.Shared.Contracts;
+using GreeACLocalServer.Shared.ValueObjects;
 
 namespace GreeACLocalServer.Api.Tests;
 
@@ -285,6 +287,136 @@ public class HeadlessDeviceManagerServiceTests
     {
         var result = await _deviceManagerService.RefreshFirmwareAsync("00:00:00:00:00:00");
         Assert.Null(result);
+    }
+
+    // ---- Runtime (operating) state ----
+
+    private void SetupRuntimeState(DeviceRuntimeStateResult result) =>
+        _mockDeviceController
+            .Setup(x => x.GetDeviceRuntimeStateAsync(It.IsAny<GreeACLocalServer.Device.Requests.GetDeviceStatusRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(result);
+
+    [Fact]
+    public async Task RefreshRuntimeStateAsync_Success_StampsStateOnDto()
+    {
+        var mac = "AA:BB:CC:DD:EE:FF";
+        await _deviceManagerService.UpdateOrAddAsync(mac, "192.168.1.100");
+        SetupRuntimeState(new DeviceRuntimeStateResult(true, string.Empty,
+            power: true, mode: 1, targetTemperature: 23, temperatureUnit: 0, currentTemperatureRaw: 65, macAddress: mac));
+
+        var refreshed = await _deviceManagerService.RefreshRuntimeStateAsync(mac);
+
+        Assert.NotNull(refreshed!.RuntimeState);
+        Assert.True(refreshed.RuntimeState!.Power);
+        Assert.Equal(AcMode.Cool, refreshed.RuntimeState.Mode);
+        Assert.Equal(23, refreshed.RuntimeState.TargetTemperature);
+        Assert.Equal(AcTemperatureUnit.Celsius, refreshed.RuntimeState.TemperatureUnit);
+        Assert.Equal(25, refreshed.RuntimeState.CurrentTemperature);
+
+        var reloaded = await _deviceManagerService.GetAsync(mac);
+        Assert.Equal(AcMode.Cool, reloaded!.RuntimeState!.Mode);
+    }
+
+    [Fact]
+    public async Task RefreshRuntimeStateAsync_OutOfRangeMode_MapsToUnknown()
+    {
+        var mac = "AA:BB:CC:DD:EE:FF";
+        await _deviceManagerService.UpdateOrAddAsync(mac, "192.168.1.100");
+        SetupRuntimeState(new DeviceRuntimeStateResult(true, string.Empty,
+            power: true, mode: 9, targetTemperature: 20, temperatureUnit: 1, macAddress: mac));
+
+        var refreshed = await _deviceManagerService.RefreshRuntimeStateAsync(mac);
+
+        Assert.Equal(AcMode.Unknown, refreshed!.RuntimeState!.Mode);
+        Assert.Equal(AcTemperatureUnit.Fahrenheit, refreshed.RuntimeState.TemperatureUnit);
+    }
+
+    [Theory]
+    [InlineData(65, 25)]     // raw carries a +40 offset
+    [InlineData(60, 20)]
+    [InlineData(0, null)]    // devices without a sensor report 0
+    [InlineData(178, null)]  // implausible (seen on some U Crown units) -> rejected
+    public async Task RefreshRuntimeStateAsync_CurrentTemperature_OffsetAndRangeChecked(int raw, int? expected)
+    {
+        var mac = "AA:BB:CC:DD:EE:FF";
+        await _deviceManagerService.UpdateOrAddAsync(mac, "192.168.1.100");
+        SetupRuntimeState(new DeviceRuntimeStateResult(true, string.Empty,
+            power: true, mode: 1, targetTemperature: 23, temperatureUnit: 0, currentTemperatureRaw: raw, macAddress: mac));
+
+        var refreshed = await _deviceManagerService.RefreshRuntimeStateAsync(mac);
+
+        Assert.Equal(expected, refreshed!.RuntimeState!.CurrentTemperature);
+    }
+
+    [Fact]
+    public async Task RefreshRuntimeStateAsync_QueryFails_ClearsStateAndReturnsNull()
+    {
+        var mac = "AA:BB:CC:DD:EE:FF";
+        await _deviceManagerService.UpdateOrAddAsync(mac, "192.168.1.100");
+        SetupRuntimeState(new DeviceRuntimeStateResult(true, string.Empty,
+            power: true, mode: 1, targetTemperature: 23, temperatureUnit: 0, macAddress: mac));
+        await _deviceManagerService.RefreshRuntimeStateAsync(mac);
+
+        SetupRuntimeState(new DeviceRuntimeStateResult(false, "NO_RESPONSE", "NO_RESPONSE"));
+        var result = await _deviceManagerService.RefreshRuntimeStateAsync(mac);
+
+        Assert.Null(result);
+        var reloaded = await _deviceManagerService.GetAsync(mac);
+        Assert.Null(reloaded!.RuntimeState);
+    }
+
+    [Fact]
+    public async Task RefreshRuntimeStateAsync_UnknownDevice_ReturnsNull()
+    {
+        SetupRuntimeState(new DeviceRuntimeStateResult(true, string.Empty,
+            power: true, mode: 1, targetTemperature: 23, temperatureUnit: 0));
+
+        Assert.Null(await _deviceManagerService.RefreshRuntimeStateAsync("00:00:00:00:00:00"));
+    }
+
+    [Fact]
+    public async Task RefreshRuntimeStateAsync_UnchangedReading_DoesNotNotifyAgain()
+    {
+        var manager = new PushCountingManager(_mockDnsResolver, _mockDeviceController);
+        await manager.UpdateOrAddAsync("AA:BB:CC:DD:EE:FF", "192.168.1.100");
+        SetupRuntimeState(new DeviceRuntimeStateResult(true, string.Empty,
+            power: true, mode: 1, targetTemperature: 23, temperatureUnit: 0, macAddress: "AA:BB:CC:DD:EE:FF"));
+
+        await manager.RefreshRuntimeStateAsync("AA:BB:CC:DD:EE:FF");
+        manager.RuntimeStatePushes = 0;
+        await manager.RefreshRuntimeStateAsync("AA:BB:CC:DD:EE:FF");
+
+        Assert.Equal(0, manager.RuntimeStatePushes);
+    }
+
+    [Fact]
+    public async Task GetRecentlyConnectedMacs_FiltersByWindow()
+    {
+        await _deviceManagerService.UpdateOrAddAsync("AA:BB:CC:DD:EE:01", "192.168.1.101");
+        await _deviceManagerService.UpdateOrAddAsync("AA:BB:CC:DD:EE:02", "192.168.1.102");
+
+        var recent = _deviceManagerService.GetRecentlyConnectedMacs(TimeSpan.FromMinutes(5));
+        Assert.Equal(2, recent.Count);
+
+        var none = _deviceManagerService.GetRecentlyConnectedMacs(TimeSpan.Zero);
+        Assert.Empty(none);
+    }
+
+    private sealed class PushCountingManager(
+        Mock<IDnsResolverService> dns,
+        Mock<IDeviceControllerService> controller)
+        : HeadlessDeviceManagerService(dns.Object, controller.Object)
+    {
+        public int RuntimeStatePushes { get; set; }
+
+        protected override Task OnDeviceUpdatedAsync(AcDeviceState deviceState)
+        {
+            if (deviceState.RuntimeState is not null)
+            {
+                RuntimeStatePushes++;
+            }
+            return Task.CompletedTask;
+        }
     }
 
     [Fact]
