@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using GreeACLocalServer.Shared.Interfaces;
 using Microsoft.AspNetCore.Components;
 using MudBlazor;
@@ -8,11 +9,21 @@ namespace GreeACLocalServer.UI.Layout;
 public partial class MainLayout : LayoutComponentBase
 {
     private bool _drawerOpen = true;
-    
+
     [Inject] private IThemeService ThemeService { get; set; } = default!;
-    
+
     private MudThemeProvider? _mudThemeProvider;
-    
+
+    private string? _version;
+
+    protected override void OnInitialized()
+    {
+        var asm = typeof(Program).Assembly;
+        _version = asm.GetName().Version?.ToString()
+            ?? "unknown";
+        base.OnInitialized();
+    }
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender && _mudThemeProvider != null)
