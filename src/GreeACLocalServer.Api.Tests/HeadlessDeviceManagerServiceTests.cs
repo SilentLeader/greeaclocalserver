@@ -508,19 +508,28 @@ public class HeadlessDeviceManagerServiceTests
     public async Task OpportunisticRefresh_ConcurrentReconnects_QueryDeviceOnce()
     {
         var mac = "AA:BB:CC:DD:EE:FF";
+
+        // Hold the single query in flight until the assertions are done, instead of
+        // racing a fixed sleep against a background Task.Run on a busy CI thread pool.
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         _mockDeviceController
             .Setup(x => x.GetDeviceFirmwareAsync(It.IsAny<GetDeviceStatusRequest>(), It.IsAny<CancellationToken>()))
             .Returns(async () =>
             {
-                await Task.Delay(200);
+                await release.Task;
                 return new DeviceFirmwareResult(false, "NO_RESPONSE", "NO_RESPONSE");
             });
 
         await Task.WhenAll(Enumerable.Range(0, 8)
             .Select(_ => _deviceManagerService.UpdateOrAddAsync(mac, "192.168.1.100")));
-        await Task.Delay(400);
 
+        // One opportunistic refresh reached the controller; the other seven
+        // reconnects were deduplicated while it was in flight.
+        await WaitUntilAsync(() => FirmwareCallCount() >= 1);
+        await Task.Delay(50);
         Assert.Equal(1, FirmwareCallCount());
+
+        release.SetResult();
     }
 
     [Fact]
@@ -554,7 +563,11 @@ public class HeadlessDeviceManagerServiceTests
     public async Task GetAllDeviceStatesAsync_DoesNotTriggerCloudUpdateFetch()
     {
         var firmware = new Mock<IFirmwareUpdateService>();
-        var service = new HeadlessDeviceManagerService(_mockDnsResolver.Object, _mockDeviceController.Object, firmware.Object);
+        // AutoQuery off: keep the opportunistic background refresh from UpdateOrAddAsync
+        // out of it, so the only firmware-update calls are the ones we make explicitly.
+        var service = new HeadlessDeviceManagerService(
+            _mockDnsResolver.Object, _mockDeviceController.Object, firmware.Object,
+            new OptionsMonitorStub<FirmwareUpdateOptions>(new FirmwareUpdateOptions { AutoQuery = false }));
         SetupFirmware(new DeviceFirmwareResult(true, "", hid: "362001065736+U-QCOM4004CV3.76.bin",
             firmwareVersion: "3.76", firmwareCode: "362001065736"));
 
