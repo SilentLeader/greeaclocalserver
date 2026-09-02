@@ -5,7 +5,16 @@
 set -e
 
 echo "🚀 Building GREE AC Local Server Docker image..."
-docker build -t gree-ac-local-server:latest .
+
+# Derive a version stamp from git so the running container reports which build it is
+# (the startup banner logs this). Without it every image would report 0.0.0.
+VERSION_RAW=$(git describe --tags --always --dirty 2>/dev/null || echo "0.0.0-local")
+VERSION_NUM=$(printf '%s' "$VERSION_RAW" | sed -E 's/^v//; s/-.*$//')
+
+docker build \
+  --build-arg APP_VERSION="${VERSION_NUM:-0.0.0}" \
+  --build-arg APP_INFORMATIONAL_VERSION="${VERSION_RAW#v}" \
+  -t gree-ac-local-server:latest .
 
 echo "✅ Build completed successfully!"
 echo ""

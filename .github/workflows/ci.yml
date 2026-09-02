@@ -50,7 +50,7 @@ jobs:
             --no-restore \
             -p:Version=${{ steps.gitversion.outputs.semVer }} \
             -p:AssemblyVersion=${{ steps.gitversion.outputs.majorMinorPatch }} \
-            -p:FileVersion=${{ steps.gitversion.outputs.assemblyInformationalVersion }} \
+            -p:FileVersion=${{ steps.gitversion.outputs.assemblySemFileVer }} \
             -p:InformationalVersion=${{ steps.gitversion.outputs.informationalVersion }}
 
       - name: Run tests

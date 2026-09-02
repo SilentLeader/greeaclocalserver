@@ -4,6 +4,9 @@ services:
       context: .
       dockerfile: Dockerfile
       target: final  # Use final stage for development container
+      args:
+        APP_VERSION: ${APP_VERSION:-0.0.0}
+        APP_INFORMATIONAL_VERSION: ${APP_INFORMATIONAL_VERSION:-0.0.0-compose}
     container_name: gree-ac-local-server-dev
     restart: unless-stopped
     ports:

@@ -14,6 +14,8 @@ EXPOSE 1813
 # ==============================================================================
 # Stage 1: Build stage - compile the application
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+ARG APP_VERSION=0.0.0
+ARG APP_INFORMATIONAL_VERSION=0.0.0-docker
 WORKDIR /src
 
 # Copy solution file first for better layer caching
@@ -32,7 +34,9 @@ RUN dotnet restore GreeACLocalServer.Api/GreeACLocalServer.Api.csproj
 COPY src/ ./
 
 # Build the application
-RUN dotnet build GreeACLocalServer.Api/GreeACLocalServer.Api.csproj -c Release --no-restore
+RUN dotnet build GreeACLocalServer.Api/GreeACLocalServer.Api.csproj -c Release --no-restore \
+    -p:Version=$APP_VERSION \
+    -p:InformationalVersion="$APP_INFORMATIONAL_VERSION"
 
 # ==============================================================================
 # Stage 2a: Debug stage - SDK image with the .NET debugger (vsdbg) for
@@ -53,7 +57,11 @@ ENTRYPOINT ["dotnet", "run", "-c", "Debug", "--no-launch-profile", "--project", 
 # ==============================================================================
 # Stage 2: Publish stage - prepare deployment artifacts
 FROM build AS publish
-RUN dotnet publish GreeACLocalServer.Api/GreeACLocalServer.Api.csproj -c Release --no-build -o /app/publish
+ARG APP_VERSION=0.0.0
+ARG APP_INFORMATIONAL_VERSION=0.0.0-docker
+RUN dotnet publish GreeACLocalServer.Api/GreeACLocalServer.Api.csproj -c Release --no-build -o /app/publish \
+    -p:Version=$APP_VERSION \
+    -p:InformationalVersion="$APP_INFORMATIONAL_VERSION"
 
 # ==============================================================================
 # Stage 3: Final runtime image - minimal and secure

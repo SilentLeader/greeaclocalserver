@@ -5,47 +5,58 @@ internal static class ConfigurationModules
     private const string LinuxConfigDirectory = "/etc/greeac-localserver";
 
     /// <summary>
-    /// Builds the full configuration pipeline from scratch. Use this for the early
-    /// bootstrap builder in <see cref="Program"/>, which has no host builder to lean on.
-    /// Precedence (low to high): <c>appsettings.json</c> →
-    /// <c>appsettings.{Environment}.json</c> → Linux <c>/etc</c> overrides →
-    /// <c>appsettings.dev.json</c> → environment variables.
+    /// The single source of truth for the configuration pipeline, used by every
+    /// entry point in <see cref="Program"/>. Precedence, low to high:
+    /// <list type="number">
+    ///   <item><c>appsettings.json</c></item>
+    ///   <item><c>appsettings.{environmentName}.json</c></item>
+    ///   <item><c>/etc/greeac-localserver/appsettings.json</c> (Linux only)</item>
+    ///   <item><c>/etc/greeac-localserver/appsettings.{environmentName}.json</c> (Linux only)</item>
+    ///   <item><c>appsettings.dev.json</c> (local developer convenience, git-ignored)</item>
+    ///   <item>environment variables</item>
+    ///   <item>command-line arguments — these override everything</item>
+    /// </list>
     /// </summary>
-    public static IConfigurationBuilder BuildConfiguration(this IConfigurationBuilder configBuilder, string? environmentName)
+    /// <param name="linuxConfigDirectory">
+    /// Overrides the <c>/etc</c> directory. Only tests pass this (the real absolute
+    /// path is not writable without root); production callers leave it <c>null</c>.
+    /// </param>
+    public static IConfigurationBuilder AddGreeConfiguration(
+        this IConfigurationBuilder builder,
+        string? environmentName,
+        string[]? commandLineArgs,
+        string? linuxConfigDirectory = null)
     {
-        configBuilder.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
+        var etc = linuxConfigDirectory ?? LinuxConfigDirectory;
+
+        builder.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
 
         if (!string.IsNullOrWhiteSpace(environmentName))
         {
-            configBuilder.AddJsonFile($"appsettings.{environmentName}.json", optional: true, reloadOnChange: true);
+            builder.AddJsonFile($"appsettings.{environmentName}.json", optional: true, reloadOnChange: true);
         }
 
-        return configBuilder.AddProjectConfiguration(environmentName);
-    }
-
-    /// <summary>
-    /// Adds only the project-specific configuration sources that the generic host and
-    /// the web host do not add on their own: the Linux <c>/etc</c> overrides and the
-    /// local <c>appsettings.dev.json</c>. Environment variables are re-applied last so
-    /// they keep the highest precedence over the sources added here.
-    /// </summary>
-    public static IConfigurationBuilder AddProjectConfiguration(this IConfigurationBuilder configBuilder, string? environmentName)
-    {
-        if (OperatingSystem.IsLinux())
+        if (OperatingSystem.IsLinux() || linuxConfigDirectory is not null)
         {
-            configBuilder.AddJsonFile(
-                Path.Combine(LinuxConfigDirectory, "appsettings.json"), optional: true, reloadOnChange: true);
+            builder.AddJsonFile(
+                Path.Combine(etc, "appsettings.json"), optional: true, reloadOnChange: true);
 
             if (!string.IsNullOrWhiteSpace(environmentName))
             {
-                configBuilder.AddJsonFile(
-                    Path.Combine(LinuxConfigDirectory, $"appsettings.{environmentName}.json"), optional: true, reloadOnChange: true);
+                builder.AddJsonFile(
+                    Path.Combine(etc, $"appsettings.{environmentName}.json"), optional: true, reloadOnChange: true);
             }
         }
 
-        configBuilder.AddJsonFile("appsettings.dev.json", optional: true, reloadOnChange: true);
-        configBuilder.AddEnvironmentVariables();
+        builder.AddJsonFile("appsettings.dev.json", optional: true, reloadOnChange: true);
 
-        return configBuilder;
+        builder.AddEnvironmentVariables();
+
+        if (commandLineArgs is { Length: > 0 })
+        {
+            builder.AddCommandLine(commandLineArgs);
+        }
+
+        return builder;
     }
 }

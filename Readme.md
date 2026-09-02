@@ -312,6 +312,31 @@ New-NetFirewallRule -DisplayName "GreeAC Server Web" -Direction Inbound -Protoco
 
 The application is configured via `appsettings.json`. Here are the key settings:
 
+### **Configuration sources & precedence**
+
+All entry points (UI mode, headless mode, and the early startup bootstrap) load the
+exact same sources, lowest to highest precedence — a later source overrides an
+earlier one:
+
+1. `appsettings.json`
+2. `appsettings.{Environment}.json` (`{Environment}` = `ASPNETCORE_ENVIRONMENT` / `DOTNET_ENVIRONMENT`)
+3. `/etc/greeac-localserver/appsettings.json` (Linux only)
+4. `/etc/greeac-localserver/appsettings.{Environment}.json` (Linux only)
+5. `appsettings.dev.json` (local developer convenience, git-ignored)
+6. **Environment variables** — nesting uses `__`, e.g. `GreeServer__ServerOptions__DomainName`
+7. **Command-line arguments** — these override everything else
+
+> **Command-line syntax:** the `__` separator only works for environment variables.
+> On the command line use `:` — `--GreeServer:ServerOptions:DomainName=gree.example.com`
+> or `/GreeServer:ServerOptions:DomainName gree.example.com`.
+
+On startup the server logs a banner line with the running build version and the
+active environment, e.g. `GreeAC Local Server 1.6.1+42.Sha.abcd starting (environment: Production)`.
+Use it to confirm which build a container is actually running. It also logs a
+warning if `ExternalIp` is a loopback address, since GREE devices on the LAN
+cannot reach the server at `127.0.0.1`.
+
+
 ### **Server Configuration**
 ```json
 {
@@ -771,6 +796,20 @@ docker-compose logs -f
 # Stop the server
 docker-compose down
 ```
+
+> **Updating a running deployment:** `docker compose up` does **not** rebuild an
+> existing image, and `docker compose restart` does **not** re-read the
+> `environment:` block. To pick up new code or new settings:
+> ```bash
+> docker compose down
+> docker compose build --no-cache
+> docker compose up -d
+> ```
+> Confirm the `GreeAC Local Server … starting` banner in the logs shows the
+> version you expect. To stamp the build version into a compose build, export it
+> first: `export APP_INFORMATIONAL_VERSION=$(git describe --tags --always)` before
+> `docker compose build` (otherwise it defaults to `0.0.0-compose`).
+> `./docker-build.sh` does this automatically.
 
 ### **Development Mode**
 
