@@ -135,6 +135,15 @@ internal class SocketHandlerService(
         _logger.LogInformation("Gree AC server started");
         _logger.LogInformation("Domainname for AC Devices: {DomainName}", _serverOptions.DomainName);
         _logger.LogInformation("IP Address for AC Devices: {ExternalIp}", _serverOptions.ExternalIp);
+
+        if (IPAddress.TryParse(_serverOptions.ExternalIp, out var externalIp) && IPAddress.IsLoopback(externalIp))
+        {
+            _logger.LogWarning(
+                "ExternalIp {ExternalIp} is a loopback address. AC devices on your network cannot reach the server here - "
+                + "set GreeServer:ServerOptions:ExternalIp to this host's LAN IP (the discover response hands this value to the devices).",
+                _serverOptions.ExternalIp);
+        }
+
         _logger.LogInformation("Port(s) for AC Devices: {PORT}", string.Join(", ", _plainPorts));
         if (_serverOptions.TLSEnabled)
         {
