@@ -7,6 +7,9 @@ services:
       context: .
       dockerfile: Dockerfile
       target: debug
+      args:
+        APP_VERSION: ${APP_VERSION:-0.0.0}
+        APP_INFORMATIONAL_VERSION: ${APP_INFORMATIONAL_VERSION:-0.0.0-compose}
     container_name: gree-ac-local-server-debug
     # keep STDIN open so `docker exec -i` (the debugger pipe) works
     stdin_open: true
