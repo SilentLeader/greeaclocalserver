@@ -563,7 +563,11 @@ public class HeadlessDeviceManagerServiceTests
     public async Task GetAllDeviceStatesAsync_DoesNotTriggerCloudUpdateFetch()
     {
         var firmware = new Mock<IFirmwareUpdateService>();
-        var service = new HeadlessDeviceManagerService(_mockDnsResolver.Object, _mockDeviceController.Object, firmware.Object);
+        // AutoQuery off: keep the opportunistic background refresh from UpdateOrAddAsync
+        // out of it, so the only firmware-update calls are the ones we make explicitly.
+        var service = new HeadlessDeviceManagerService(
+            _mockDnsResolver.Object, _mockDeviceController.Object, firmware.Object,
+            new OptionsMonitorStub<FirmwareUpdateOptions>(new FirmwareUpdateOptions { AutoQuery = false }));
         SetupFirmware(new DeviceFirmwareResult(true, "", hid: "362001065736+U-QCOM4004CV3.76.bin",
             firmwareVersion: "3.76", firmwareCode: "362001065736"));
 
