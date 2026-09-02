@@ -280,6 +280,17 @@ internal class SocketHandlerService(
                         EnabledSslProtocols = ResolveProtocols(_serverOptions.AllowLegacyTlsProtocols)
                     };
 
+                    // Old GREE Wi-Fi modules only offer legacy RSA-kex CBC-SHA cipher
+                    // suites, which SslStream does not advertise by default on Linux
+                    // (OpenSSL 3) - the handshake fails with "no shared cipher". When
+                    // legacy protocols are allowed, widen the offered suite set too.
+                    // CipherSuitesPolicy is a Linux/macOS-only API (the ctor throws
+                    // PlatformNotSupportedException on Windows), so it is skipped there.
+                    if (_serverOptions.AllowLegacyTlsProtocols && !OperatingSystem.IsWindows())
+                    {
+                        authOptions.CipherSuitesPolicy = LegacyDeviceCipherSuites;
+                    }
+
                     await sslStream.AuthenticateAsServerAsync(authOptions, _cancellationToken);
                     _logger.LogDebug("TLS handshake completed successfully");
                     clientStream = sslStream;
@@ -577,6 +588,45 @@ internal class SocketHandlerService(
         sb.Append("fg-type      : ").AppendLine(Convert.ToHexString(p.AsSpan(2, 2)));
         sb.Append("fg-mac       : ").AppendLine(Convert.ToHexString(p.AsSpan(4, 6)).ToLowerInvariant());
     }
+
+    /// <summary>
+    /// Cipher suites offered by the device TLS listener when legacy protocols are
+    /// enabled: modern AEAD suites first, then the legacy RSA-kex CBC-SHA suites
+    /// that old GREE firmware needs. No NULL / RC4 / export / anonymous suites.
+    /// Linux/macOS only - <see cref="CipherSuitesPolicy"/> is unsupported on Windows.
+    /// </summary>
+    internal static IReadOnlyList<TlsCipherSuite> LegacyDeviceCipherSuiteList { get; } =
+    [
+        // TLS 1.3
+        TlsCipherSuite.TLS_AES_256_GCM_SHA384,
+        TlsCipherSuite.TLS_AES_128_GCM_SHA256,
+        TlsCipherSuite.TLS_CHACHA20_POLY1305_SHA256,
+        // TLS 1.2 - modern (ECDHE / AEAD)
+        TlsCipherSuite.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+        TlsCipherSuite.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+        TlsCipherSuite.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
+        // TLS 1.2 - legacy CBC-SHA (what old GREE firmware offers)
+        TlsCipherSuite.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
+        TlsCipherSuite.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
+        TlsCipherSuite.TLS_RSA_WITH_AES_256_GCM_SHA384,
+        TlsCipherSuite.TLS_RSA_WITH_AES_128_GCM_SHA256,
+        TlsCipherSuite.TLS_RSA_WITH_AES_256_CBC_SHA256,
+        TlsCipherSuite.TLS_RSA_WITH_AES_128_CBC_SHA256,
+        TlsCipherSuite.TLS_RSA_WITH_AES_256_CBC_SHA,
+        TlsCipherSuite.TLS_RSA_WITH_AES_128_CBC_SHA,
+        TlsCipherSuite.TLS_RSA_WITH_3DES_EDE_CBC_SHA,
+    ];
+
+    // Lazy: the CipherSuitesPolicy ctor throws PlatformNotSupportedException on
+    // Windows, so it must never run as part of type initialization (ResolveProtocols
+    // and the unit tests touch this type on every platform). Only the Linux/macOS
+    // code path forces the value.
+#pragma warning disable CA1416 // guarded by !OperatingSystem.IsWindows() at the only call site
+    private static readonly Lazy<CipherSuitesPolicy> LegacyDeviceCipherSuitesLazy =
+        new(() => new CipherSuitesPolicy(LegacyDeviceCipherSuiteList));
+
+    private static CipherSuitesPolicy LegacyDeviceCipherSuites => LegacyDeviceCipherSuitesLazy.Value;
+#pragma warning restore CA1416
 
     /// <summary>
     /// Resolves the enabled TLS protocol set for the device listener. When

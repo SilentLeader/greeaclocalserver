@@ -1,3 +1,4 @@
+using System.Net.Security;
 using System.Security.Authentication;
 using GreeACLocalServer.Device.Services;
 
@@ -32,4 +33,37 @@ public class TlsProtocolResolutionTests
         Assert.False(protocols.HasFlag(SslProtocols.Tls11));
     }
 #pragma warning restore CS0618, SYSLIB0039
+
+    [Fact]
+    public void LegacyDeviceCipherSuiteList_IncludesLegacyRsaCbcShaSuites()
+    {
+        var suites = SocketHandlerService.LegacyDeviceCipherSuiteList;
+
+        Assert.Contains(TlsCipherSuite.TLS_RSA_WITH_AES_128_CBC_SHA, suites);
+        Assert.Contains(TlsCipherSuite.TLS_RSA_WITH_AES_256_CBC_SHA, suites);
+    }
+
+    [Fact]
+    public void LegacyDeviceCipherSuiteList_IncludesAtLeastOneTls13AeadSuite()
+    {
+        var suites = SocketHandlerService.LegacyDeviceCipherSuiteList;
+
+        Assert.Contains(suites, s =>
+            s is TlsCipherSuite.TLS_AES_256_GCM_SHA384
+              or TlsCipherSuite.TLS_AES_128_GCM_SHA256
+              or TlsCipherSuite.TLS_CHACHA20_POLY1305_SHA256);
+    }
+
+    [Fact]
+    public void LegacyDeviceCipherSuiteList_HasNoNullRc4OrExportSuites()
+    {
+        foreach (var suite in SocketHandlerService.LegacyDeviceCipherSuiteList)
+        {
+            var name = suite.ToString();
+            Assert.DoesNotContain("NULL", name, StringComparison.Ordinal);
+            Assert.DoesNotContain("RC4", name, StringComparison.Ordinal);
+            Assert.DoesNotContain("EXPORT", name, StringComparison.Ordinal);
+            Assert.DoesNotContain("anon", name, StringComparison.OrdinalIgnoreCase);
+        }
+    }
 }
