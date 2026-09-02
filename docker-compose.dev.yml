@@ -1,5 +1,10 @@
 services:
   gree-ac-server-dev:
+    # Own tag so it never collides with the release image from ./docker-build.sh.
+    # This override is build-only and does not run ./docker-build.sh, so unless
+    # APP_VERSION / APP_INFORMATIONAL_VERSION are exported (or a .env exists) the
+    # startup banner reads 0.0.0-compose - expected for the dev image.
+    image: gree-ac-local-server:dev
     build:
       context: .
       dockerfile: Dockerfile

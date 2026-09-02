@@ -33,10 +33,10 @@ RUN dotnet restore GreeACLocalServer.Api/GreeACLocalServer.Api.csproj
 # Copy the entire source code (excluding tests via .dockerignore)
 COPY src/ ./
 
-# Build the application
-RUN dotnet build GreeACLocalServer.Api/GreeACLocalServer.Api.csproj -c Release --no-restore \
-    -p:Version=$APP_VERSION \
-    -p:InformationalVersion="$APP_INFORMATIONAL_VERSION"
+# No standalone `dotnet build` here: the debug stage runs `dotnet run` (which
+# builds itself) and the publish stage runs a single `dotnet publish` (below).
+# Splitting build + `publish --no-build` made the framework static-web-asset
+# composition skip blazor.web.js / blazor.server.js in a clean container.
 
 # ==============================================================================
 # Stage 2a: Debug stage - SDK image with the .NET debugger (vsdbg) for
@@ -59,7 +59,7 @@ ENTRYPOINT ["dotnet", "run", "-c", "Debug", "--no-launch-profile", "--project", 
 FROM build AS publish
 ARG APP_VERSION=0.0.0
 ARG APP_INFORMATIONAL_VERSION=0.0.0-docker
-RUN dotnet publish GreeACLocalServer.Api/GreeACLocalServer.Api.csproj -c Release --no-build -o /app/publish \
+RUN dotnet publish GreeACLocalServer.Api/GreeACLocalServer.Api.csproj -c Release -o /app/publish \
     -p:Version=$APP_VERSION \
     -p:InformationalVersion="$APP_INFORMATIONAL_VERSION"
 

@@ -1,5 +1,8 @@
 services:
   gree-ac-server:
+    # Same tag as ./docker-build.sh so both paths build/use one image. Version
+    # args come from .env (written by ./docker-build.sh, auto-read by compose).
+    image: gree-ac-local-server:latest
     build:
       context: .
       dockerfile: Dockerfile
