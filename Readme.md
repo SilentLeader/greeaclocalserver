@@ -802,14 +802,18 @@ docker-compose down
 > `environment:` block. To pick up new code or new settings:
 > ```bash
 > docker compose down
-> docker compose build --no-cache
+> ./docker-build.sh          # or: docker compose build --no-cache
 > docker compose up -d
 > ```
-> Confirm the `GreeAC Local Server … starting` banner in the logs shows the
-> version you expect. To stamp the build version into a compose build, export it
-> first: `export APP_INFORMATIONAL_VERSION=$(git describe --tags --always)` before
-> `docker compose build` (otherwise it defaults to `0.0.0-compose`).
-> `./docker-build.sh` does this automatically.
+> `./docker-build.sh` derives the version from `git describe` and writes it to
+> `.env`, which `docker compose build` reads automatically; it also tags the
+> image `gree-ac-local-server:latest`, the same tag `docker-compose.yml` uses, so
+> both paths build one image. A bare `docker compose build` with no `.env` and no
+> exported `APP_INFORMATIONAL_VERSION` stamps the banner `0.0.0-compose`.
+> After starting, confirm the `GreeAC Local Server … starting` banner in the logs
+> shows the version you expect, and that the web UI loads (a stuck loading screen
+> usually means `/_framework/blazor.web.js` 404s - rebuild with a single
+> `dotnet publish`, which the current Dockerfile does).
 
 ### **Development Mode**
 

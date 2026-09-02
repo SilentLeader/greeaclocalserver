@@ -11,6 +11,14 @@ echo "🚀 Building GREE AC Local Server Docker image..."
 VERSION_RAW=$(git describe --tags --always --dirty 2>/dev/null || echo "0.0.0-local")
 VERSION_NUM=$(printf '%s' "$VERSION_RAW" | sed -E 's/^v//; s/-.*$//')
 
+# `docker compose build` reads .env from the project directory automatically and
+# uses it to interpolate build.args, so write the same version there. .env is
+# gitignored (*.env).
+cat > .env <<EOF
+APP_VERSION=${VERSION_NUM:-0.0.0}
+APP_INFORMATIONAL_VERSION=${VERSION_RAW#v}
+EOF
+
 docker build \
   --build-arg APP_VERSION="${VERSION_NUM:-0.0.0}" \
   --build-arg APP_INFORMATIONAL_VERSION="${VERSION_RAW#v}" \

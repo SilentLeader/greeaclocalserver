@@ -16,7 +16,9 @@ echo "🚀 Starting GREE AC Local Server..."
 # Check if we need to build the image first
 if ! docker images | grep -q "gree-ac-local-server"; then
     echo "📦 Building Docker image (first run)..."
-    docker-compose build
+    # Use docker-build.sh so the version stamp (.env + image tag) is set; a bare
+    # `docker-compose build` would stamp the banner 0.0.0-compose.
+    ./docker-build.sh
 fi
 
 # Start the services

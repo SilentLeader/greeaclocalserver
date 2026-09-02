@@ -3,6 +3,9 @@
 #   docker compose -f docker-compose.debug.yml up -d --build
 services:
   gree-ac-server-debug:
+    # Own tag; build-only override (no ./docker-build.sh), so the banner reads
+    # 0.0.0-compose unless the version args are exported - expected when debugging.
+    image: gree-ac-local-server:debug
     build:
       context: .
       dockerfile: Dockerfile
