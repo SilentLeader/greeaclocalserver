@@ -1,4 +1,5 @@
-﻿using GreeACLocalServer.Api.Components;
+﻿using System.Reflection;
+using GreeACLocalServer.Api.Components;
 using GreeACLocalServer.Api.Hubs;
 using Microsoft.AspNetCore.Mvc;
 using Serilog;
@@ -17,12 +18,14 @@ internal static class Program
             ?? Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT");
 
         var config = new ConfigurationBuilder()
-            .BuildConfiguration(environmentName)
+            .AddGreeConfiguration(environmentName, args)
             .Build();
 
         Log.Logger = new LoggerConfiguration()
             .ReadFrom.Configuration(config)
             .CreateLogger();
+
+        LogStartupBanner(environmentName);
 
         try
         {
@@ -50,6 +53,19 @@ internal static class Program
         }
     }
 
+    private static void LogStartupBanner(string? environmentName)
+    {
+        var asm = typeof(Program).Assembly;
+        var version = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+            ?? asm.GetName().Version?.ToString()
+            ?? "unknown";
+
+        Log.Information(
+            "GreeAC Local Server {Version} starting (environment: {Environment})",
+            version,
+            string.IsNullOrWhiteSpace(environmentName) ? "Production" : environmentName);
+    }
+
     private static async Task RunWithWebApplicationAsync(string[] args)
     {
         var builder = WebApplication.CreateBuilder(args);
@@ -58,9 +74,11 @@ internal static class Program
         // Configure OS-specific hosting
         builder.Host.ConfigureHostingServices();
 
-        // WebApplication.CreateBuilder already loaded appsettings(.{Environment}).json
-        // and environment variables; only add the project-specific extras here.
-        builder.Configuration.AddProjectConfiguration(builder.Environment.EnvironmentName);
+        // Take full control of the configuration pipeline: drop the host builder's
+        // default sources and re-add them in our documented precedence, with the
+        // command line last so it overrides everything.
+        builder.Configuration.Sources.Clear();
+        builder.Configuration.AddGreeConfiguration(builder.Environment.EnvironmentName, args);
 
         // Configure common services
         builder.Services.ConfigureWebServices(builder.Configuration);
@@ -76,7 +94,10 @@ internal static class Program
         var hostBuilder = Host.CreateDefaultBuilder(args)
             .UseSerilog()
             .ConfigureAppConfiguration((context, config) =>
-                config.AddProjectConfiguration(context.HostingEnvironment.EnvironmentName))
+            {
+                config.Sources.Clear();
+                config.AddGreeConfiguration(context.HostingEnvironment.EnvironmentName, args);
+            })
             .ConfigureServices((context, services) => services.ConfigureHeadlessServices(context.Configuration));
 
         // Configure OS-specific hosting
