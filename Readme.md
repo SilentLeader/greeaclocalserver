@@ -426,6 +426,24 @@ cannot reach the server at `127.0.0.1`.
   > to a GREE-operated host, sending the device firmware code as a query parameter.
   > It stays off by default; leave it off if the server must not contact GREE.
 
+#### **`GreeServer.RuntimeStatePolling`** (UI mode only)
+- Background poll that reads each recently-connected AC's power / mode / setpoint /
+  unit (and indoor temperature where supported) over outbound UDP on port 7000, so
+  the UI can show a live-ish status.
+- **`Enabled`** (default `true`), **`PollIntervalSeconds`** (default `10`),
+  **`OnlineWindowMinutes`** (default `5`, devices connected within this window are
+  polled), **`MaxDegreeOfParallelism`** (default `4`).
+- **`FailureBackoffSeconds`** (default `300`): after a failed poll, that device is
+  not retried until this long has passed.
+- **`MaxConsecutiveFailures`** (default `5`): after this many failures in a row the
+  device is dropped from the poll entirely until it reconnects (`0` disables this,
+  leaving only the backoff). The stop is logged once at information level.
+- Newer GREE firmware that talks to the vendor cloud over TLS often does **not**
+  answer the local UDP port 7000 control protocol at all — for those devices live
+  runtime state, firmware read and Device Config are unavailable (device tracking
+  and heartbeats still work), and the poller backs off and then stops on its own
+  instead of retrying every cycle.
+
 ### **Additional Configuration**
 ```json
 {

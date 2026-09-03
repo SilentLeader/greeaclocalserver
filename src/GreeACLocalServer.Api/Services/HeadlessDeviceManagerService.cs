@@ -55,7 +55,9 @@ public class HeadlessDeviceManagerService(
                 IpAddress = ipAddress,
                 DNSName = dnsName,
                 LastConnectionTime = now,
-                Endpoints = MergeEndpoint(existing.Endpoints, port, isTls, now)
+                Endpoints = MergeEndpoint(existing.Endpoints, port, isTls, now),
+                // A reconnect gives a device that was backed off / given up on a fresh chance.
+                RuntimeStatePollFailures = 0
             });
 
         // Virtual method hook for derived classes (e.g., SignalR notifications)
@@ -217,11 +219,19 @@ public class HeadlessDeviceManagerService(
     /// </summary>
     private (AcDeviceState? State, bool Changed) StampRuntimeState(string macAddress, AcRuntimeState? reading)
     {
+        var now = DateTime.UtcNow;
         while (_deviceStates.TryGetValue(macAddress, out var existing))
         {
             var previous = existing.RuntimeState;
+            // "changed" drives the SignalR push and must only reflect a real reading
+            // change — the attempt timestamp and failure counter never trigger a push.
             var changed = reading is null ? previous is not null : !reading.SameReadingAs(previous);
-            var next = existing with { RuntimeState = reading };
+            var next = existing with
+            {
+                RuntimeState = reading,
+                RuntimeStateAttemptedUtc = now,
+                RuntimeStatePollFailures = reading is null ? existing.RuntimeStatePollFailures + 1 : 0
+            };
 
             if (_deviceStates.TryUpdate(macAddress, next, existing))
             {
@@ -230,6 +240,22 @@ public class HeadlessDeviceManagerService(
         }
 
         return (null, false);
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyCollection<string> GetRuntimeStatePollTargets(
+        TimeSpan window, TimeSpan failureBackoff, int maxConsecutiveFailures)
+    {
+        var now = DateTime.UtcNow;
+        var cutoff = now - window;
+        return _deviceStates.Values
+            .Where(s => s.LastConnectionTime >= cutoff)
+            .Where(s => maxConsecutiveFailures <= 0 || s.RuntimeStatePollFailures < maxConsecutiveFailures)
+            .Where(s => s.RuntimeStatePollFailures == 0
+                        || s.RuntimeStateAttemptedUtc is not { } attempted
+                        || now - attempted >= failureBackoff)
+            .Select(s => s.MacAddress)
+            .ToList();
     }
 
     /// <summary>

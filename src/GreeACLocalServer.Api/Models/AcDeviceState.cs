@@ -41,6 +41,20 @@ namespace GreeACLocalServer.Api.Models
         /// most recent poll failed (a failed poll clears it).
         /// </summary>
         public AcRuntimeState? RuntimeState { get; init; }
+
+        /// <summary>
+        /// When a runtime-state poll was last <em>attempted</em> against the device
+        /// (success or failure). Used together with <see cref="RuntimeStatePollFailures"/>
+        /// to back off polling a device that does not answer the local UDP control protocol.
+        /// </summary>
+        public DateTime? RuntimeStateAttemptedUtc { get; init; }
+
+        /// <summary>
+        /// Consecutive failed runtime-state polls. Reset to 0 on a successful poll and
+        /// on reconnect (<c>UpdateOrAddAsync</c>). Used to back off, then stop polling
+        /// a device that does not speak the local UDP control protocol at all.
+        /// </summary>
+        public int RuntimeStatePollFailures { get; init; }
     }
 
     /// <summary>A single observed (port, TLS) connection endpoint with its last-seen time.</summary>

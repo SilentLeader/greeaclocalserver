@@ -21,4 +21,13 @@ public class AcRuntimeStateOptions
 
     /// <summary>How many devices are polled concurrently within a cycle.</summary>
     public int MaxDegreeOfParallelism { get; set; } = 4;
+
+    /// <summary>After a failed poll, wait at least this long before retrying that device.</summary>
+    public int FailureBackoffSeconds { get; set; } = 300;
+
+    /// <summary>
+    /// After this many consecutive failures, stop polling the device until it
+    /// reconnects. 0 disables the "give up" behaviour (only the backoff applies).
+    /// </summary>
+    public int MaxConsecutiveFailures { get; set; } = 5;
 }

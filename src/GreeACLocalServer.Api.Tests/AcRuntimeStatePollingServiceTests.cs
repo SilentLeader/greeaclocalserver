@@ -21,6 +21,19 @@ public class AcRuntimeStatePollingServiceTests
         public IDisposable? OnChange(Action<T, string?> listener) => null;
     }
 
+    private static Mock<IInternalDeviceManagerService> ManagerReturning(params string[] targets)
+    {
+        var dms = new Mock<IInternalDeviceManagerService>();
+        dms.Setup(x => x.GetRuntimeStatePollTargets(
+                It.IsAny<TimeSpan>(), It.IsAny<TimeSpan>(), It.IsAny<int>()))
+            .Returns(targets);
+        dms.Setup(x => x.GetRecentlyConnectedMacs(It.IsAny<TimeSpan>()))
+            .Returns(targets);
+        dms.Setup(x => x.RefreshRuntimeStateAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((DeviceDto?)null);
+        return dms;
+    }
+
     private static async Task RunOneCycleAsync(AcRuntimeStatePollingService service)
     {
         await service.StartAsync(CancellationToken.None);
@@ -29,13 +42,9 @@ public class AcRuntimeStatePollingServiceTests
     }
 
     [Fact]
-    public async Task PollsExactlyTheRecentlyConnectedDevices()
+    public async Task PollsExactlyTheRuntimeStatePollTargets()
     {
-        var dms = new Mock<IInternalDeviceManagerService>();
-        dms.Setup(x => x.GetRecentlyConnectedMacs(It.IsAny<TimeSpan>()))
-            .Returns(new[] { "mac-a", "mac-b" });
-        dms.Setup(x => x.RefreshRuntimeStateAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((DeviceDto?)null);
+        var dms = ManagerReturning("mac-a", "mac-b");
 
         var options = new OptionsMonitorStub<AcRuntimeStateOptions>(
             new AcRuntimeStateOptions { Enabled = true, PollIntervalSeconds = 3600 });
@@ -47,6 +56,57 @@ public class AcRuntimeStatePollingServiceTests
     }
 
     [Fact]
+    public async Task PassesBackoffAndFailureCeilingFromOptions()
+    {
+        var dms = ManagerReturning("mac-a");
+        var options = new OptionsMonitorStub<AcRuntimeStateOptions>(
+            new AcRuntimeStateOptions
+            {
+                Enabled = true,
+                PollIntervalSeconds = 3600,
+                OnlineWindowMinutes = 5,
+                FailureBackoffSeconds = 120,
+                MaxConsecutiveFailures = 7
+            });
+
+        await RunOneCycleAsync(new AcRuntimeStatePollingService(dms.Object, options, NullLogger<AcRuntimeStatePollingService>.Instance));
+
+        dms.Verify(x => x.GetRuntimeStatePollTargets(
+            TimeSpan.FromMinutes(5), TimeSpan.FromSeconds(120), 7), Times.Once);
+    }
+
+    [Fact]
+    public async Task NoTargets_DoesNotPoll()
+    {
+        var dms = ManagerReturning();
+        var options = new OptionsMonitorStub<AcRuntimeStateOptions>(
+            new AcRuntimeStateOptions { Enabled = true, PollIntervalSeconds = 3600 });
+
+        await RunOneCycleAsync(new AcRuntimeStatePollingService(dms.Object, options, NullLogger<AcRuntimeStatePollingService>.Instance));
+
+        dms.Verify(x => x.RefreshRuntimeStateAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task AllDevicesBackedOff_DoesNotPollThem()
+    {
+        // Recently connected, but none are poll targets this cycle (all in backoff).
+        var dms = new Mock<IInternalDeviceManagerService>();
+        dms.Setup(x => x.GetRuntimeStatePollTargets(
+                It.IsAny<TimeSpan>(), It.IsAny<TimeSpan>(), It.IsAny<int>()))
+            .Returns(Array.Empty<string>());
+        dms.Setup(x => x.GetRecentlyConnectedMacs(It.IsAny<TimeSpan>()))
+            .Returns(new[] { "mac-a", "mac-b" });
+
+        var options = new OptionsMonitorStub<AcRuntimeStateOptions>(
+            new AcRuntimeStateOptions { Enabled = true, PollIntervalSeconds = 3600, MaxConsecutiveFailures = 0 });
+
+        await RunOneCycleAsync(new AcRuntimeStatePollingService(dms.Object, options, NullLogger<AcRuntimeStatePollingService>.Instance));
+
+        dms.Verify(x => x.RefreshRuntimeStateAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
     public async Task Disabled_DoesNotPoll()
     {
         var dms = new Mock<IInternalDeviceManagerService>();
@@ -55,20 +115,16 @@ public class AcRuntimeStatePollingServiceTests
 
         await RunOneCycleAsync(new AcRuntimeStatePollingService(dms.Object, options, NullLogger<AcRuntimeStatePollingService>.Instance));
 
-        dms.Verify(x => x.GetRecentlyConnectedMacs(It.IsAny<TimeSpan>()), Times.Never);
+        dms.Verify(x => x.GetRuntimeStatePollTargets(It.IsAny<TimeSpan>(), It.IsAny<TimeSpan>(), It.IsAny<int>()), Times.Never);
         dms.Verify(x => x.RefreshRuntimeStateAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
     public async Task OneDeviceThrowing_DoesNotStopTheOthers()
     {
-        var dms = new Mock<IInternalDeviceManagerService>();
-        dms.Setup(x => x.GetRecentlyConnectedMacs(It.IsAny<TimeSpan>()))
-            .Returns(new[] { "bad", "good" });
+        var dms = ManagerReturning("bad", "good");
         dms.Setup(x => x.RefreshRuntimeStateAsync("bad", It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("boom"));
-        dms.Setup(x => x.RefreshRuntimeStateAsync("good", It.IsAny<CancellationToken>()))
-            .ReturnsAsync((DeviceDto?)null);
 
         var options = new OptionsMonitorStub<AcRuntimeStateOptions>(
             new AcRuntimeStateOptions { Enabled = true, PollIntervalSeconds = 3600, MaxDegreeOfParallelism = 1 });
