@@ -402,6 +402,88 @@ public class HeadlessDeviceManagerServiceTests
         Assert.Empty(none);
     }
 
+    // ---- Runtime-state poll backoff (F36) ----
+
+    private static readonly TimeSpan FiveMin = TimeSpan.FromMinutes(5);
+
+    [Fact]
+    public async Task RefreshRuntimeStateAsync_FailedPoll_IncrementsFailureCounter_SuccessResets()
+    {
+        var mac = "AA:BB:CC:DD:EE:10";
+        await _deviceManagerService.UpdateOrAddAsync(mac, "192.168.1.100");
+
+        SetupRuntimeState(new DeviceRuntimeStateResult(false, "NO_RESPONSE", "NO_RESPONSE"));
+        await _deviceManagerService.RefreshRuntimeStateAsync(mac);
+
+        // One failure: excluded when the ceiling is 1, still eligible when it is 2.
+        Assert.Empty(_deviceManagerService.GetRuntimeStatePollTargets(FiveMin, TimeSpan.Zero, 1));
+        Assert.Contains(mac, _deviceManagerService.GetRuntimeStatePollTargets(FiveMin, TimeSpan.Zero, 2));
+
+        // A successful poll clears the counter.
+        SetupRuntimeState(new DeviceRuntimeStateResult(true, string.Empty,
+            power: true, mode: 1, targetTemperature: 23, temperatureUnit: 0, macAddress: mac));
+        await _deviceManagerService.RefreshRuntimeStateAsync(mac);
+
+        Assert.Contains(mac, _deviceManagerService.GetRuntimeStatePollTargets(FiveMin, TimeSpan.Zero, 1));
+    }
+
+    [Fact]
+    public async Task RefreshRuntimeStateAsync_FailedPoll_WithinBackoffWindow_IsNotATarget()
+    {
+        var mac = "AA:BB:CC:DD:EE:11";
+        await _deviceManagerService.UpdateOrAddAsync(mac, "192.168.1.100");
+        SetupRuntimeState(new DeviceRuntimeStateResult(false, "NO_RESPONSE", "NO_RESPONSE"));
+        await _deviceManagerService.RefreshRuntimeStateAsync(mac);
+
+        // Backoff not yet elapsed -> skipped; elapsed -> eligible again.
+        Assert.Empty(_deviceManagerService.GetRuntimeStatePollTargets(FiveMin, TimeSpan.FromHours(1), 5));
+        Assert.Contains(mac, _deviceManagerService.GetRuntimeStatePollTargets(FiveMin, TimeSpan.Zero, 5));
+    }
+
+    [Fact]
+    public async Task GetRuntimeStatePollTargets_MaxConsecutiveFailuresZero_OnlyBackoffFilters()
+    {
+        var mac = "AA:BB:CC:DD:EE:12";
+        await _deviceManagerService.UpdateOrAddAsync(mac, "192.168.1.100");
+        SetupRuntimeState(new DeviceRuntimeStateResult(false, "NO_RESPONSE", "NO_RESPONSE"));
+        for (var i = 0; i < 10; i++)
+        {
+            await _deviceManagerService.RefreshRuntimeStateAsync(mac);
+        }
+
+        // "give up" disabled: many failures, but once the backoff is clear it still polls.
+        Assert.Contains(mac, _deviceManagerService.GetRuntimeStatePollTargets(FiveMin, TimeSpan.Zero, 0));
+        Assert.Empty(_deviceManagerService.GetRuntimeStatePollTargets(FiveMin, TimeSpan.FromHours(1), 0));
+    }
+
+    [Fact]
+    public async Task GetRuntimeStatePollTargets_ExcludesStaleDevices()
+    {
+        var mac = "AA:BB:CC:DD:EE:13";
+        await _deviceManagerService.UpdateOrAddAsync(mac, "192.168.1.100");
+
+        Assert.Contains(mac, _deviceManagerService.GetRuntimeStatePollTargets(FiveMin, TimeSpan.Zero, 5));
+        Assert.Empty(_deviceManagerService.GetRuntimeStatePollTargets(TimeSpan.Zero, TimeSpan.Zero, 5));
+    }
+
+    [Fact]
+    public async Task UpdateOrAddAsync_Reconnect_ResetsRuntimeStateFailureCounter()
+    {
+        var mac = "AA:BB:CC:DD:EE:14";
+        await _deviceManagerService.UpdateOrAddAsync(mac, "192.168.1.100");
+        SetupRuntimeState(new DeviceRuntimeStateResult(false, "NO_RESPONSE", "NO_RESPONSE"));
+        for (var i = 0; i < 5; i++)
+        {
+            await _deviceManagerService.RefreshRuntimeStateAsync(mac);
+        }
+
+        Assert.Empty(_deviceManagerService.GetRuntimeStatePollTargets(FiveMin, TimeSpan.Zero, 5));
+
+        await _deviceManagerService.UpdateOrAddAsync(mac, "192.168.1.100");
+
+        Assert.Contains(mac, _deviceManagerService.GetRuntimeStatePollTargets(FiveMin, TimeSpan.Zero, 5));
+    }
+
     private sealed class PushCountingManager(
         Mock<IDnsResolverService> dns,
         Mock<IDeviceControllerService> controller)
