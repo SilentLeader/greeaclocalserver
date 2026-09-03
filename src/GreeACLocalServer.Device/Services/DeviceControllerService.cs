@@ -339,7 +339,7 @@ internal class DeviceControllerService(
 
             if (response == null || string.IsNullOrEmpty(response.Data))
             {
-                _logger.LogWarning("No response from device at IP {IpAddress}", ipAddress);
+                _logger.LogDebug("No response from device at IP {IpAddress}", ipAddress);
                 return new ScanResult(false, "Device did not respond to scan request", "NO_RESPONSE");
             }
 
@@ -360,7 +360,7 @@ internal class DeviceControllerService(
 
             if (bindResponse?.ResponseData == null || bindResponse.ResponseData.ResponseType != "bindok")
             {
-                _logger.LogWarning("Bind failed for MAC {MacAddress}", packResponse.Mac);
+                _logger.LogDebug("Bind failed for MAC {MacAddress}", packResponse.Mac);
                 return new ScanResult(false, "Device did not respond to bind request", "BIND_NO_RESPONSE");
             }
 
@@ -375,7 +375,7 @@ internal class DeviceControllerService(
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error scanning device at IP {IpAddress}", ipAddress);
+            _logger.LogWarning(ex, "Error scanning device at IP {IpAddress}", ipAddress);
             return new ScanResult(false, $"Scan failed: {ex.Message}", "SCAN_EXCEPTION");
         }
     }
@@ -407,7 +407,7 @@ internal class DeviceControllerService(
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error sending pack command to device at IP {IpAddress}", ipAddress);
+            _logger.LogWarning(ex, "Error sending pack command to device at IP {IpAddress}", ipAddress);
             return new PackCommandResult<TResponse>(false, $"Pack command failed: {ex.Message}", "PACK_COMMAND_EXCEPTION");
         }
     }
@@ -446,7 +446,7 @@ internal class DeviceControllerService(
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "UDP command failed for IP {IpAddress} after {Attempts} attempts", ipAddress, attempt + 1);
+                _logger.LogDebug(ex, "UDP command failed for IP {IpAddress} after {Attempts} attempts", ipAddress, attempt + 1);
             }
         }
 
