@@ -9,7 +9,7 @@ using Microsoft.Extensions.Options;
 
 namespace GreeACLocalServer.Device.Services;
 
-internal class CryptoService(IOptionsMonitor<EncryptionOptions> options, ILogger<CryptoService> _logger) : ICryptoService
+public class CryptoService(IOptionsMonitor<EncryptionOptions> options, ILogger<CryptoService> _logger) : ICryptoService
 {
     private string _defaultCryptoKey => string.IsNullOrEmpty(options.CurrentValue.DefaultCryptoKey)
         ? throw new InvalidOperationException("GreeServer:EncryptionOptions:DefaultCryptoKey must be configured.")
