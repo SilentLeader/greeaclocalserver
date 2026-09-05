@@ -1,4 +1,6 @@
-namespace GreeACLocalServer.DeviceEmulator;
+using GreeACLocalServer.DeviceEmulator.Services;
+
+namespace GreeACLocalServer.DeviceEmulator.Models;
 
 /// <summary>Target server + connection behavior for <see cref="InboundClient"/>.</summary>
 public sealed record InboundClientOptions

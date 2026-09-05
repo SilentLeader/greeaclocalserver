@@ -1,4 +1,4 @@
-namespace GreeACLocalServer.DeviceEmulator;
+namespace GreeACLocalServer.DeviceEmulator.Models;
 
 /// <summary>
 /// Mutable in-memory state of the emulated air conditioner, shared between the

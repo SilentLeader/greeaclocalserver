@@ -1,4 +1,4 @@
-namespace GreeACLocalServer.DeviceEmulator;
+namespace GreeACLocalServer.DeviceEmulator.Services;
 
 /// <summary>Tiny timestamped console logger for this dev tool - no logging framework needed.</summary>
 public static class ConsoleLog

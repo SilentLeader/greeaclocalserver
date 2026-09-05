@@ -1,4 +1,4 @@
-namespace GreeACLocalServer.DeviceEmulator;
+namespace GreeACLocalServer.DeviceEmulator.Services;
 
 /// <summary>
 /// Exact inverse of the server's <c>NormalizeMac</c> de-scrambling

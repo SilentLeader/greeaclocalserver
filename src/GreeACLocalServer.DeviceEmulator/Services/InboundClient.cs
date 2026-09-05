@@ -6,8 +6,9 @@ using System.Text;
 using System.Text.Json;
 using GreeACLocalServer.Device.Interfaces;
 using GreeACLocalServer.Device.Responses;
+using GreeACLocalServer.DeviceEmulator.Models;
 
-namespace GreeACLocalServer.DeviceEmulator;
+namespace GreeACLocalServer.DeviceEmulator.Services;
 
 /// <summary>
 /// Plays the "real device" side of the inbound GREE protocol

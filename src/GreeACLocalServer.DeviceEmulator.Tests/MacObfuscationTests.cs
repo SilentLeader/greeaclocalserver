@@ -1,4 +1,4 @@
-using GreeACLocalServer.DeviceEmulator;
+using GreeACLocalServer.DeviceEmulator.Services;
 
 namespace GreeACLocalServer.DeviceEmulator.Tests;
 

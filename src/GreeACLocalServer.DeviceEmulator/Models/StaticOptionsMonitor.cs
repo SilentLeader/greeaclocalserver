@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Options;
 
-namespace GreeACLocalServer.DeviceEmulator;
+namespace GreeACLocalServer.DeviceEmulator.Models;
 
 /// <summary>
 /// Minimal <see cref="IOptionsMonitor{TOptions}"/> that always returns the same
