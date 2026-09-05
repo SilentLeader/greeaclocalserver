@@ -12,6 +12,7 @@ internal static class CommandLineHelper
                           pow on|off                    - set reported power state
                           mode auto|cool|dry|fan|heat   - set reported mode
                           settemp <n>                   - set reported target temperature
+                          tempsen <celsius>|off         - set reported room temperature, or disable the sensor
                           tempunit c|f                  - set reported temperature unit
                           name <text>                   - set reported device name
                           host <text>                   - set reported remote host
@@ -35,6 +36,8 @@ internal static class CommandLineHelper
                             --mac <mac>               Emulated device MAC, 12 hex chars (default: aabbccddeeff)
                             --name <name>             Emulated device name (default: "Emulated AC")
                             --hid <hid>               Emulated firmware identifier (default: a fake but parseable one)
+                            --room-temp <celsius>     Initial room temperature reading (default: 25)
+                            --no-temp-sensor          Emulate a unit without a room-temperature sensor
                             --key <key>               Default crypto key, must match the server's DefaultCryptoKey
                             --device-key <key>        Per-device bind key, 16 chars (default: derived from --mac)
                             --heartbeat-seconds <n>   Heartbeat interval in seconds (default: 60)
@@ -53,6 +56,7 @@ internal static class CommandLineHelper
                            mode        : {state.Mode}
                            setTem      : {state.SetTem}
                            temUn       : {(state.TemUn == 0 ? "celsius" : "fahrenheit")}
+                           temSen      : {(state.TemSenSupported ? $"{state.TemSen - 40}°C" : "unsupported")}
                            """);
     }
 }

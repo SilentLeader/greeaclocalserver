@@ -19,6 +19,8 @@ var allowLegacyTls = args.HasFlag("--legacy-tls");
 var mac = args.GetOption("--mac", "aabbccddeeff");
 var name = args.GetOption("--name", "Emulated AC");
 var hid = args.GetOption("--hid", "100000000000+U-TESTV1.00.bin");
+var roomTemp = int.Parse(args.GetOption("--room-temp", "25"));
+var temSenSupported = !args.HasFlag("--no-temp-sensor");
 var cryptoKey = args.GetOption("--key", "a3K8Bx%2r8Y7#xDh");
 var heartbeatSeconds = int.Parse(args.GetOption("--heartbeat-seconds", "60"));
 
@@ -32,6 +34,8 @@ var state = new EmulatedDeviceState
     CryptoKey = deviceCryptoKey,
     Name = name,
     Hid = hid,
+    TemSen = roomTemp + 40,
+    TemSenSupported = temSenSupported,
 };
 
 var crypto = new CryptoService(

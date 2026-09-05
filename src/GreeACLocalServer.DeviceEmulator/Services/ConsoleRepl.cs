@@ -79,6 +79,25 @@ public sealed class ConsoleRepl(InboundClient inbound, EmulatedDeviceState state
 
                     break;
 
+                case "tempsen":
+                    if (arg.Equals("off", StringComparison.OrdinalIgnoreCase))
+                    {
+                        state.TemSenSupported = false;
+                        ConsoleLog.Info("TemSen -> unsupported (no room-temperature sensor)");
+                    }
+                    else if (int.TryParse(arg, out var roomTemp))
+                    {
+                        state.TemSen = roomTemp + 40;
+                        state.TemSenSupported = true;
+                        ConsoleLog.Info($"TemSen -> {roomTemp}°C");
+                    }
+                    else
+                    {
+                        ConsoleLog.Warn("Usage: tempsen <celsius>|off");
+                    }
+
+                    break;
+
                 case "tempunit":
                     if (arg.Equals("c", StringComparison.OrdinalIgnoreCase))
                     {

@@ -48,4 +48,23 @@ public class EmulatedDeviceStateTests
 
         Assert.Equal(0, Assert.IsType<int>(state.ValueForColumn("Pow")));
     }
+
+    [Fact]
+    public void ValueForColumn_TemSenUnsupported_ReturnsZeroRegardlessOfStoredValue()
+    {
+        var state = CreateState();
+        state.TemSen = 65;
+        state.TemSenSupported = false;
+
+        Assert.Equal(0, Assert.IsType<int>(state.ValueForColumn("TemSen")));
+    }
+
+    [Fact]
+    public void ValueForColumn_TemSenSupported_ReturnsStoredValue()
+    {
+        var state = CreateState();
+        state.TemSen = 65;
+
+        Assert.Equal(65, Assert.IsType<int>(state.ValueForColumn("TemSen")));
+    }
 }

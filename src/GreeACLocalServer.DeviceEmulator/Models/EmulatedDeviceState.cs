@@ -21,6 +21,7 @@ public sealed class EmulatedDeviceState
     private int _setTem = 24;
     private int _temUn; // 0=Celsius, 1=Fahrenheit
     private int _temSen; // raw sensor reading (+40 offset); 0 = "no sensor"
+    private bool _temSenSupported = true;
 
     public string Name { get => Read(() => _name); set => Write(() => _name = value); }
 
@@ -39,6 +40,14 @@ public sealed class EmulatedDeviceState
     public int TemSen { get => Read(() => _temSen); set => Write(() => _temSen = value); }
 
     /// <summary>
+    /// Whether this emulated unit reports a room-temperature reading at all -
+    /// many real AC units don't have the sensor, and report <c>TemSen=0</c>
+    /// (which the server treats as "no sensor", see
+    /// <c>HeadlessDeviceManagerService.AdjustCurrentTemperature</c>).
+    /// </summary>
+    public bool TemSenSupported { get => Read(() => _temSenSupported); set => Write(() => _temSenSupported = value); }
+
+    /// <summary>
     /// The value for a <c>status</c> query column, boxed as the type a real
     /// device sends: a JSON string for text columns, a JSON number for the
     /// operating-state ones (mirrors <c>QueryResponse</c>'s doc comment).
@@ -52,7 +61,7 @@ public sealed class EmulatedDeviceState
         "Mod" => Mode,
         "SetTem" => SetTem,
         "TemUn" => TemUn,
-        "TemSen" => TemSen,
+        "TemSen" => TemSenSupported ? TemSen : 0,
         _ => string.Empty,
     };
 
