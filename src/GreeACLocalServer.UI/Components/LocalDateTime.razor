@@ -1,0 +1,61 @@
+@using System.Globalization
+
+@* Renders a UTC timestamp in the browser's time zone and locale.
+
+   DateTime.ToLocalTime() cannot be used for this: when the component runs
+   interactively on the server (the InteractiveAuto first load, before the
+   WebAssembly bundle is cached) "local" is the server process time zone,
+   which is UTC in production. This component always defers the conversion to
+   the browser via JS interop, so it is correct in every render mode. Until
+   the browser has localized it (and if JS is unavailable) it shows the raw
+   UTC value so nothing renders blank. *@
+
+<span class="gac-local-datetime">@_display</span>
+
+@code {
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+
+    [Parameter, EditorRequired] public DateTime Value { get; set; }
+
+    private string _display = string.Empty;
+    private string? _localizedFor;
+
+    private string Iso => DateTime.SpecifyKind(Value, DateTimeKind.Utc).ToString("O", CultureInfo.InvariantCulture);
+
+    protected override void OnParametersSet()
+    {
+        if (_localizedFor != Iso)
+        {
+            _display = DateTime.SpecifyKind(Value, DateTimeKind.Utc)
+                .ToString("g", CultureInfo.InvariantCulture) + " UTC";
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        var iso = Iso;
+        if (_localizedFor == iso)
+        {
+            return;
+        }
+
+        try
+        {
+            var localized = await JS.InvokeAsync<string>("gacLocalDateTime.format", iso);
+            _localizedFor = iso;
+            if (!string.IsNullOrWhiteSpace(localized) && localized != _display)
+            {
+                _display = localized;
+                StateHasChanged();
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+            // Circuit already gone; nothing to update.
+        }
+        catch (JSException)
+        {
+            // Leave the UTC fallback in place.
+        }
+    }
+}

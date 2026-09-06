@@ -36,7 +36,7 @@
                 <MudItem xs="12">
                     <MudText Typo="Typo.subtitle2" Class="mb-1">Last Connection</MudText>
                     <MudText Typo="Typo.body1" Class="mb-1">
-                        @Device.LastConnectionTimeUtc.ToLocalTime().ToString("G")
+                        <LocalDateTime Value="Device.LastConnectionTimeUtc" />
                     </MudText>
                     <MudText Typo="Typo.caption" Color="Color.Secondary">
                         (@GetTimeAgo())
@@ -89,7 +89,7 @@
                             @AcStateHelpers.PowerLabel(state.Power) · @AcStateHelpers.ModeLabel(state.Mode)
                         </MudText>
                         <MudText Typo="Typo.caption" Color="Color.Secondary">
-                            updated @state.QueriedUtc.ToLocalTime().ToString("G")
+                            updated <LocalDateTime Value="state.QueriedUtc" />
                         </MudText>
                     }
                     else
@@ -163,7 +163,7 @@
                                             <MudText Typo="Typo.body1">Port @endpoint.Port</MudText>
                                             <MudText Typo="Typo.caption" Color="Color.Secondary" Class="ml-2">
                                                 @(endpoint.IsTls ? "TLS" : "plaintext") · last seen
-                                                @endpoint.LastSeenUtc.ToLocalTime().ToString("G")
+                                                <LocalDateTime Value="endpoint.LastSeenUtc" />
                                             </MudText>
                                         </div>
                                     </MudListItem>
