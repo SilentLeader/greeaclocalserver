@@ -51,15 +51,28 @@ else
                         </div>
                         @if (device.RuntimeState is { } state)
                         {
-                            <MudText Typo="Typo.caption" Class="d-flex justify-center mb-3 mud-text-secondary">
-                                @AcStateHelpers.ModeTooltip(state)
-                            </MudText>
+                            <div class="d-flex justify-center align-center mb-3 gap-2">
+                                <MudTooltip Text="@AcStateHelpers.ModeLabel(state.Mode)">
+                                    <MudIcon Icon="@AcStateHelpers.ModeIcon(state.Mode)"
+                                             Color="@(state.Power ? Color.Primary : Color.Default)" Size="Size.Small" />
+                                </MudTooltip>
+                                <MudTooltip Text="set">
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@AcStateHelpers.FormatSetpoint(state)</MudText>
+                                </MudTooltip>
+                                @if (state.CurrentTemperature is not null)
+                                {
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">/</MudText>
+                                    <MudTooltip Text="now">
+                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@AcStateHelpers.FormatCurrent(state)</MudText>
+                                    </MudTooltip>
+                                }
+                            </div>
                         }
 
                         <MudDivider Class="mb-2" />
                         <div class="d-flex align-center">
-                            <MudIcon Icon="@Icons.Material.Filled.Memory" Size="Size.Small" Class="mr-2" />
-                            <MudText Typo="Typo.body2">@DeviceHelpers.FormatMacAddress(device.MacAddress)</MudText>
+                            <MudIcon Icon="@Icons.Material.Filled.Memory" Size="Size.Small" Class="mr-2, mud-text-secondary" />
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">@DeviceHelpers.FormatMacAddress(device.MacAddress)</MudText>
                         </div>
                     </MudCardContent>
                     <MudCardActions>
@@ -67,6 +80,15 @@ else
                                    Size="Size.Small" OnClick="() => ShowDeviceDetails(device)">
                             Details
                         </MudButton>
+                        @if (device.RuntimeState is { } powerState)
+                        {
+                            <MudSpacer />
+                            <MudTooltip Text="@AcStateHelpers.PowerLabel(powerState.Power)">
+                                <MudIcon Icon="@AcStateHelpers.PowerIcon(powerState.Power)"
+                                         Color="@AcStateHelpers.PowerColor(powerState.Power)" Size="Size.Small"
+                                         Class="mr-2" />
+                            </MudTooltip>
+                        }
                     </MudCardActions>
                 </MudCard>
             </MudItem>

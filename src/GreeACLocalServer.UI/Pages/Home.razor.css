@@ -7,10 +7,8 @@
 }
 
 .gac-device-card {
-    transition: transform 0.15s ease-out, box-shadow 0.25s ease;
+    transition: box-shadow 0.25s ease;
 }
-
-
 
 .gac-status-dot {
     width: 8px;
@@ -122,4 +120,8 @@
     50% {
         box-shadow: 0 0 8px 3px rgba(45, 212, 191, 0.6);
     }
+}
+
+#device-grid {
+  position: relative;
 }

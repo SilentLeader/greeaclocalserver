@@ -32,7 +32,7 @@ public static class AcStateHelpers
     };
 
     public static string PowerIcon(bool power)
-        => power ? Icons.Material.Filled.PowerSettingsNew : Icons.Material.Filled.PowerOff;
+        => Icons.Material.Filled.PowerSettingsNew;
 
     public static Color PowerColor(bool power) => power ? Color.Success : Color.Default;
 
