@@ -52,4 +52,15 @@ public class ServerOptions
     /// logged once and closed cleanly either way.
     /// </summary>
     public string? UnknownFrameCapturePath { get; set; }
+
+    /// <summary>
+    /// When true, the discover reply advertises this server as the device's data
+    /// host (<c>datHost</c> = <see cref="DomainName"/>, <c>datHostPort</c>, and
+    /// <c>protocol</c> "TCP" on the plaintext listener), as the community dummy
+    /// servers do. Newer firmware then opens extra connections to upload binary
+    /// "fg" telemetry frames, which this server does not acknowledge. False
+    /// (default) mirrors the GREE cloud: empty <c>datHost</c>, port 0, empty
+    /// <c>protocol</c>, and no telemetry uploads.
+    /// </summary>
+    public bool EnableTelemetryUpload { get; set; } = false;
 }

@@ -88,15 +88,16 @@ internal class MessageHandlerService(ICryptoService cryptoService, IOptionsMonit
 
         var plainPort = options.TcpPorts.Count > 0 ? options.TcpPorts[0] : ServerOption.PORT;
         var advertisedPort = isTLS ? options.TlsPort : plainPort;
+        var telemetry = options.EnableTelemetryUpload;
 
         var discoverResponse = new DiscoverResponse
         {
-            ServerHost = options.DomainName,
-            ServerPort = advertisedPort,
+            DataHost = telemetry ? options.DomainName : string.Empty,
+            DataHostPort = telemetry ? advertisedPort : 0,
             HostOrIpAddress = options.ExternalIp,
             Ip = options.ExternalIp,
             SecondaryIp = options.ExternalIp,
-            Protocol = isTLS ? "" : "TCP",
+            Protocol = telemetry && !isTLS ? "TCP" : string.Empty,
             ResponseType = ResponseType.Server,
             TcpPort = advertisedPort,
             UdpPort = advertisedPort
