@@ -200,6 +200,10 @@ For production deployments, it's recommended to run the application as a system 
    sudo systemctl daemon-reload
    sudo systemctl enable greeac-localserver.service
    ```
+   The unit starts after `network-online.target`, so at boot it waits until the network is
+   configured. This relies on the distribution's wait-online service
+   (`systemd-networkd-wait-online` or `NetworkManager-wait-online`), which is enabled by default
+   on most systems.
 
 5. **Configure the application**:
    ```bash

@@ -1,8 +1,10 @@
 [Unit]
 Description=GreeAC Local Server
 Documentation=https://github.com/SilentLeader/greeaclocalserver
-After=network.target
-Wants=network.target
+# Wait until the network is actually configured at boot (network.target only
+# means the network stack was started). Once reached, restarts do not wait.
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=notify
