@@ -348,7 +348,8 @@ cannot reach the server at `127.0.0.1`.
       "ListenIPAddresses": [],             // Specific IPs to bind to (empty = all)
       "IdleTimeoutSeconds": 180,           // Close an idle device connection after N seconds (<=0 disables)
       "MaxConcurrentConnections": 200,     // Cap on concurrent device connections (<=0 disables)
-      "AllowLegacyTlsProtocols": true      // Accept SSL3/TLS1.0/1.1 for old firmware; false = TLS1.2+ only
+      "AllowLegacyTlsProtocols": true,     // Accept SSL3/TLS1.0/1.1 for old firmware; false = TLS1.2+ only
+      "EnableTelemetryUpload": false       // Advertise this server as datHost; newer firmware then uploads binary "fg" telemetry frames
     },
     "EncryptionOptions": {
       "DefaultCryptoKey": "a3K8Bx%2r8Y7#xDh",  // GREE encryption key (default works; required)
@@ -792,6 +793,7 @@ The following environment variables can be used to configure the container:
 | `GreeServer__ServerOptions__AllowLegacyTlsProtocols` | `true` | Accept SSL3/TLS1.0/1.1 on the 1813 listener; `false` = TLS1.2+ only |
 | `GreeServer__ServerOptions__IdleTimeoutSeconds` | `180` | Drop a device connection after N seconds of silence |
 | `GreeServer__ServerOptions__MaxConcurrentConnections` | `200` | Cap on concurrent device connections |
+| `GreeServer__ServerOptions__EnableTelemetryUpload` | `false` | Advertise this server as the device data host (`datHost`); newer firmware then uploads binary "fg" telemetry frames |
 | `Server__EnableManagement` | `true` | Allow device-config **writes** (set name / set remote host); status query is always allowed |
 | `GreeServer__FirmwareUpdateCheck__AutoQuery` | `true` | Read device firmware version over LAN UDP; `false` = no automatic device probing |
 | `GreeServer__FirmwareUpdateCheck__Enabled` | `false` | Also check the GREE update server for newer firmware (outbound HTTPS to GREE) |

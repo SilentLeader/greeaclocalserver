@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using GreeACLocalServer.Device.Models;
+using GreeACLocalServer.Device.Responses;
 using GreeACLocalServer.Device.Services;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -147,8 +148,15 @@ public class MessageHandlerServiceTests
         Assert.Matches(new Regex(@"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$"), time!);
     }
 
+    private static JsonElement DecryptDiscoverPack(CryptoService crypto, GreeHandlerResponse response)
+    {
+        using var outer = JsonDocument.Parse(response.Data);
+        var decrypted = crypto.Decrypt(outer.RootElement.GetProperty("pack").GetString()!);
+        return JsonDocument.Parse(decrypted).RootElement.Clone();
+    }
+
     [Fact]
-    public void GetResponse_Discover_Configured_ReturnsPackContainingDomain()
+    public void GetResponse_Discover_Default_MirrorsCloudWithoutDataHost()
     {
         var crypto = CreateCrypto();
         var service = CreateService(crypto, new ServerOptions
@@ -157,18 +165,39 @@ public class MessageHandlerServiceTests
             ExternalIp = "203.0.113.7"
         });
 
-        var response = service.GetResponse("{\"t\":\"dis\",\"mac\":\"AABBCC\"}");
+        var pack = DecryptDiscoverPack(crypto, service.GetResponse("{\"t\":\"dis\",\"mac\":\"AABBCC\"}"));
 
-        using var doc = JsonDocument.Parse(response.Data);
-        var decrypted = crypto.Decrypt(doc.RootElement.GetProperty("pack").GetString()!);
-        Assert.Contains("gree.example.com", decrypted);
+        Assert.Equal("203.0.113.7", pack.GetProperty("host").GetString());
+        Assert.Equal("203.0.113.7", pack.GetProperty("ip").GetString());
+        Assert.Equal(5000, pack.GetProperty("tcpPort").GetInt32());
+        Assert.Equal(string.Empty, pack.GetProperty("datHost").GetString());
+        Assert.Equal(0, pack.GetProperty("datHostPort").GetInt32());
+        Assert.Equal(string.Empty, pack.GetProperty("protocol").GetString());
+    }
+
+    [Fact]
+    public void GetResponse_Discover_TelemetryEnabled_AdvertisesDataHost()
+    {
+        var crypto = CreateCrypto();
+        var service = CreateService(crypto, new ServerOptions
+        {
+            DomainName = "gree.example.com",
+            ExternalIp = "203.0.113.7",
+            EnableTelemetryUpload = true
+        });
+
+        var pack = DecryptDiscoverPack(crypto, service.GetResponse("{\"t\":\"dis\",\"mac\":\"AABBCC\"}"));
+
+        Assert.Equal("gree.example.com", pack.GetProperty("datHost").GetString());
+        Assert.Equal(5000, pack.GetProperty("datHostPort").GetInt32());
+        Assert.Equal("TCP", pack.GetProperty("protocol").GetString());
     }
 
     [Fact]
     public void GetResponse_Discover_PicksUpReloadedOptions()
     {
         var crypto = CreateCrypto();
-        var current = new ServerOptions { DomainName = "old.example.com", ExternalIp = "203.0.113.7" };
+        var current = new ServerOptions { DomainName = "old.example.com", ExternalIp = "203.0.113.7", EnableTelemetryUpload = true };
 
         var monitor = new Mock<IOptionsMonitor<ServerOptions>>();
         monitor.Setup(x => x.CurrentValue).Returns(() => current);
@@ -179,7 +208,7 @@ public class MessageHandlerServiceTests
         Assert.Contains("old.example.com", crypto.Decrypt(JsonDocument.Parse(first.Data).RootElement.GetProperty("pack").GetString()!));
 
         // Simulate a configuration reload.
-        current = new ServerOptions { DomainName = "new.example.com", ExternalIp = "203.0.113.7" };
+        current = new ServerOptions { DomainName = "new.example.com", ExternalIp = "203.0.113.7", EnableTelemetryUpload = true };
 
         var second = service.GetResponse("{\"t\":\"dis\",\"mac\":\"AABBCC\"}");
         Assert.Contains("new.example.com", crypto.Decrypt(JsonDocument.Parse(second.Data).RootElement.GetProperty("pack").GetString()!));

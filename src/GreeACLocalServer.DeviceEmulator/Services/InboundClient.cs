@@ -175,7 +175,7 @@ public sealed class InboundClient(EmulatedDeviceState state, ICryptoService cryp
                 var packB64 = outer.RootElement.GetProperty("pack").GetString()!;
                 var decrypted = crypto.Decrypt(packB64);
                 var discover = JsonSerializer.Deserialize<DiscoverResponse>(decrypted);
-                ConsoleLog.Info($"Discover -> server reports host={discover?.ServerHost} ip={discover?.HostOrIpAddress} tcpPort={discover?.TcpPort}");
+                ConsoleLog.Info($"Discover -> server reports host={discover?.HostOrIpAddress} ip={discover?.Ip} tcpPort={discover?.TcpPort} datHost={discover?.DataHost}");
             }
             finally
             {

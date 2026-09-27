@@ -4,11 +4,15 @@ namespace GreeACLocalServer.Device.Responses;
 
 public class DiscoverResponse : BaseResponse
 {
+    /// <summary>
+    /// Telemetry ("data") upload target. Newer firmware uploads binary "fg" frames
+    /// here; the GREE cloud leaves it empty. Not used for routing.
+    /// </summary>
     [JsonPropertyName("datHost")]
-    public string ServerHost { get; set; } = string.Empty;
+    public string DataHost { get; set; } = string.Empty;
 
     [JsonPropertyName("datHostPort")]
-    public int ServerPort { get; set; }
+    public int DataHostPort { get; set; }
 
     [JsonPropertyName("host")]
     public string HostOrIpAddress { get; set; } = string.Empty;
