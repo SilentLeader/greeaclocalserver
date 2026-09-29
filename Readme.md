@@ -492,6 +492,10 @@ You **must** configure your DNS server to point GREE devices to your local serve
 ### **Option 3: Dedicated DNS Server**
 Configure your DNS server (BIND, Unbound, etc.) with appropriate zone files.
 
+> **Blocking the ACs' internet access?** Still allow ICMP echo (ping) from the ACs to their
+> default gateway. Otherwise the devices fall into a reconnect loop — see
+> [Devices Drop Off for 30–120 Minutes](#devices-drop-off-for-30120-minutes).
+
 ## 📱 **Device Configuration**
 
 ### **Built-in Device Configuration Tool**
@@ -677,6 +681,24 @@ The server exposes RESTful API endpoints for programmatic access:
 2. **Check Port Access** - Port 5000 must be accessible
 3. **Firewall Rules** - Allow inbound connections on port 5000
 4. **Device Configuration** - Verify AC is configured for your domain
+
+### **Devices Drop Off for 30–120 Minutes**
+Symptom: an AC works for hours, then stops sending heartbeats and does not answer ping or UDP
+(sometimes it still answers ARP) while the Wi-Fi access point shows it as connected. After
+30–120 minutes it comes back on its own with a fresh `dis` → `devLogin`, or immediately after a
+power cycle.
+
+Cause: after a Wi-Fi reconnect the GREE Wi-Fi module re-runs DHCP and then **pings its default
+gateway**. If the gateway does not answer, the module drops the network and starts over — the
+DHCP server log shows a full `DHCPDISCOVER` → `DHCPACK` cycle every ~15 seconds for that AC.
+This typically happens when a firewall rule that blocks the ACs from the internet also blocks
+traffic to the router itself (destination `any`). A clean boot does not run the gateway check,
+which is why a power cycle "fixes" it until the next Wi-Fi hiccup.
+
+Fix: add a firewall rule **above** the blocking rule that passes ICMP echo request from the ACs
+to the router's LAN address (e.g. OPNsense/pfSense: *Pass, Protocol ICMP, ICMP type Echo
+request, Source: the AC alias, Destination: This Firewall*). Check it with your router's
+DHCP log: the 15-second `DHCPDISCOVER` loops should disappear.
 
 ### **Device Configuration Issues**
 1. **Device Not Found** - Ensure AC is powered on and network-connected
