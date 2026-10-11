@@ -1,0 +1,59 @@
+#!/sbin/openrc-run
+# OpenRC init script for GreeAC Local Server.
+# Port of systemd/greeac-localserver.service for OpenRC-based systems
+# (Alpine Linux, Gentoo, Devuan).
+#
+# Environment variables live in /etc/conf.d/greeac-localserver (OpenRC
+# sources it automatically for the init script of the same name; variables
+# need an `export` prefix there to reach the service process).
+
+description="GreeAC Local Server"
+description_restart="restart GreeAC Local Server"
+
+# systemd: ExecStart=, User=/Group=
+command="/opt/greeac-localserver/GreeACLocalServer.Api"
+command_user="greeac:greeac"
+pidfile="/run/greeac-localserver.pid"
+
+# systemd: WorkingDirectory= — the .NET host loads appsettings.json from the
+# content root, which defaults to the current working directory. Without this
+# the service runs with cwd / and finds no appsettings.json.
+directory="/opt/greeac-localserver"
+
+# systemd: After=network-online.target / Wants=network-online.target
+# (OpenRC's "net" is the closest equivalent; there is no wait-online target)
+depend() {
+	need net
+}
+
+# Respawn only works under the OpenRC supervisor; plain command= scripts
+# do not restart on crash.
+supervisor=supervise-daemon
+
+# systemd: Restart=always / RestartSec=10
+# respawn_max=0 means unlimited restarts (Restart=always semantics).
+respawn_max=0
+respawn_delay=10
+
+# systemd: TimeoutStopSec=30 — send TERM, wait up to 30s, then KILL.
+retry="TERM/30/KILL/5"
+
+# systemd: SyslogIdentifier + journal -> OpenRC writes to log files instead
+# (rotate them, see openrc/README.md — supervise-daemon keeps the fds open,
+# so logrotate needs copytruncate).
+output_log=/var/log/greeac-localserver/stdout.log
+error_log=/var/log/greeac-localserver/stderr.log
+
+# systemd: NoNewPrivileges=yes (supervise-daemon >= OpenRC 0.45)
+no_new_privs=yes
+
+# systemd: LimitNOFILE=65536 / LimitNPROC=4096, plus ReadWritePaths for the
+# log directories. Note: PrivateTmp/ProtectSystem/ProtectHome have no OpenRC
+# equivalent; the service runs as the unprivileged "greeac" user instead.
+start_pre() {
+	checkpath --directory --owner "${command_user%:*}" --mode 0750 \
+		/var/log/greeac-localserver /opt/greeac-localserver/logs
+	ulimit -n 65536
+	# dash (Devuan's /bin/sh) has no `ulimit -u`; its NPROC flag is -p.
+	ulimit -u 4096 2>/dev/null || ulimit -p 4096
+}

@@ -42,7 +42,7 @@ This project provides a **modern, feature-rich local replacement server for GREE
 - **Fail-fast configuration** - required settings are validated at startup
 - **Cross-platform Support** (Windows/Linux)
 - **Docker Ready** with proper networking
-- **System Service Integration** (systemd/Windows Service)
+- **System Service Integration** (systemd/OpenRC/Windows Service)
 - **Unit + integration tests** covering the protocol core (crypto, message handler, socket/UDP handling)
 
 ## 🚀 **Installation**
@@ -222,6 +222,24 @@ For production deployments, it's recommended to run the application as a system 
    sudo journalctl -u greeac-localserver.service -f
    ```
 
+#### **Linux (OpenRC)**
+
+For OpenRC-based distributions (Alpine Linux, Gentoo, Devuan) the repository ships an
+init script plus its environment file under `openrc/`, mirroring the systemd unit
+(unprivileged `greeac` user, `Restart=always`/`RestartSec=10` via `supervise-daemon`,
+same timeouts and resource limits).
+
+```bash
+sudo cp openrc/greeac-localserver /etc/init.d/greeac-localserver
+sudo cp openrc/greeac-localserver.conf.d /etc/conf.d/greeac-localserver
+sudo chmod +x /etc/init.d/greeac-localserver
+sudo rc-update add greeac-localserver default
+sudo rc-service greeac-localserver start
+```
+
+See [`openrc/README.md`](openrc/README.md) for the full installation walkthrough,
+configuration and troubleshooting (OpenRC logs to files instead of a journal).
+
 #### **Windows Service**
 
 1. **Download and extract** the Windows release to `C:\Program Files\GreeACLocalServer\`
@@ -275,13 +293,18 @@ For production deployments, it's recommended to run the application as a system 
 
 #### **Service Configuration Notes**
 
-- **Automatic startup**: Both systemd and Windows services are configured to start automatically on boot
+- **Automatic startup**: All service variants are configured to start automatically on boot
 - **Process monitoring**: Services will automatically restart if the application crashes
-- **Security**: Linux service runs as non-privileged user; Windows service runs as Local System
-- **Logging**: 
-  - Linux: Uses systemd journal (`journalctl -u greeac-localserver.service`)
+- **Security**: Linux services run as non-privileged user; Windows service runs as Local System.
+  The systemd unit additionally applies sandboxing directives (`ProtectSystem`,
+  `PrivateTmp`); OpenRC has no equivalent for those, so beyond `NoNewPrivileges`
+  (`no_new_privs=yes`) the unprivileged user is the only isolation there
+- **Logging**:
+  - Linux (systemd): Uses systemd journal (`journalctl -u greeac-localserver.service`)
+  - Linux (OpenRC): Writes to `/var/log/greeac-localserver/stdout.log` and `stderr.log`
   - Windows: Logs to Windows Event Log and application log files
-- **Resource limits**: systemd service includes security and resource restrictions
+- **Resource limits**: Both Linux service files include the same resource restrictions
+  (`LimitNOFILE`/`ulimit -n`, `LimitNPROC`/`ulimit -u`)
 
 #### **Port Configuration for Services**
 
@@ -758,6 +781,22 @@ sudo systemctl is-enabled greeac-localserver.service
 # Service configuration file location
 sudo nano /etc/systemd/system/greeac-localserver.service
 ```
+
+#### **Linux (OpenRC)**
+```bash
+# Check service status
+sudo rc-service greeac-localserver status
+
+# View logs (OpenRC writes to files, there is no journal)
+sudo tail -f /var/log/greeac-localserver/stdout.log
+
+# Restart service
+sudo rc-service greeac-localserver restart
+
+# Check if service is enabled for auto-start
+rc-status default | grep greeac-localserver
+```
+More details in [`openrc/README.md`](openrc/README.md).
 
 #### **Windows Service**
 ```powershell
