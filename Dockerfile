@@ -76,7 +76,7 @@ ENV ASPNETCORE_ENVIRONMENT=Production
 ENV ASPNETCORE_URLS=http://+:5100
 ENV GreeServer__ServerOptions__DomainName=gree.local.server
 ENV GreeServer__ServerOptions__ExternalIp=127.0.0.1
-ENV GreeServer__EnableUI=true
+ENV Server__EnableUI=true
 ENV GreeServer__ServerOptions__TLSEnabled=true
 
 # Create a non-root user for security

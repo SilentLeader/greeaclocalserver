@@ -47,7 +47,7 @@ docker-compose up -d
 | `ASPNETCORE_URLS` | `http://+:5100;https://+:5443` | Kestrel URLs for web UI (HTTP and TLS) |
 | `GreeServer__ServerOptions__DomainName` | `gree.local.server` | Domain name for DNS configuration |
 | `GreeServer__ServerOptions__ExternalIp` | `127.0.0.1` | Server IP address |
-| `GreeServer__EnableUI` | `true` | Enable/disable web interface |
+| `Server__EnableUI` | `true` | Enable/disable web interface |
 | `GreeServer__ServerOptions__TLSEnabled` | `false` | Enable TLS/HTTPS for web UI |
 | `DeviceManager__DeviceTimeoutMinutes` | `60` | Device timeout in minutes |
 

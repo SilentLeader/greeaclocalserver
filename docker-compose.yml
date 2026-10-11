@@ -30,7 +30,7 @@ services:
       - GreeServer__EncryptionOptions__DefaultCryptoKey=a3K8Bx%2r8Y7#xDh
       
       # UI Configuration
-      - GreeServer__EnableUI=true
+      - Server__EnableUI=true
       
       # Device Manager Configuration  
       - DeviceManager__DeviceTimeoutMinutes=60
