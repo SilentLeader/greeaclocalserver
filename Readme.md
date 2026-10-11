@@ -297,8 +297,8 @@ configuration and troubleshooting (OpenRC logs to files instead of a journal).
 - **Process monitoring**: Services will automatically restart if the application crashes
 - **Security**: Linux services run as non-privileged user; Windows service runs as Local System.
   The systemd unit additionally applies sandboxing directives (`ProtectSystem`,
-  `PrivateTmp`, `NoNewPrivileges`); OpenRC has no equivalent, so the unprivileged user
-  is the only isolation there
+  `PrivateTmp`); OpenRC has no equivalent for those, so beyond `NoNewPrivileges`
+  (`no_new_privs=yes`) the unprivileged user is the only isolation there
 - **Logging**:
   - Linux (systemd): Uses systemd journal (`journalctl -u greeac-localserver.service`)
   - Linux (OpenRC): Writes to `/var/log/greeac-localserver/stdout.log` and `stderr.log`
