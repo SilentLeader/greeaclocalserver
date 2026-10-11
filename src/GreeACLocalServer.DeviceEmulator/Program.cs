@@ -1,3 +1,4 @@
+using GreeACLocalServer.Device.Crypto;
 using GreeACLocalServer.Device.Models;
 using GreeACLocalServer.Device.Services;
 using GreeACLocalServer.DeviceEmulator.Extensions;
@@ -23,6 +24,12 @@ var roomTemp = int.Parse(args.GetOption("--room-temp", "25"));
 var temSenSupported = !args.HasFlag("--no-temp-sensor");
 var cryptoKey = args.GetOption("--key", "a3K8Bx%2r8Y7#xDh");
 var heartbeatSeconds = int.Parse(args.GetOption("--heartbeat-seconds", "60"));
+var protocol = args.GetOption("--protocol", "v1");
+if (!protocol.TryParseProtocol(out var generation))
+{
+    await Console.Error.WriteLineAsync($"Unknown --protocol '{protocol}', expected v1 or v2.");
+    return;
+}
 
 // Derived from the MAC (not random) so restarting the emulator with the same
 // --mac keeps working against the server's cached bind key (30 min TTL) instead
@@ -50,11 +57,11 @@ var inbound = new InboundClient(state, crypto, new InboundClientOptions
     AllowLegacyTls = allowLegacyTls,
     HeartbeatInterval = TimeSpan.FromSeconds(heartbeatSeconds),
 });
-var outbound = new OutboundResponder(state, crypto);
+var outbound = new OutboundResponder(state, crypto, generation);
 
 using var cts = new CancellationTokenSource();
 
-ConsoleLog.Info($"GREE AC emulator starting: mac={state.Mac} target={host}:{port} tls={useTls} heartbeat={heartbeatSeconds}s");
+ConsoleLog.Info($"GREE AC emulator starting: mac={state.Mac} target={host}:{port} tls={useTls} heartbeat={heartbeatSeconds}s protocol={protocol}");
 ConsoleLog.Info("Type 'help' for the list of commands.");
 
 var inboundTask = inbound.RunAsync(cts.Token);
@@ -63,7 +70,7 @@ var outboundTask = outbound.RunAsync(cts.Token);
 var repl = new ConsoleRepl(inbound, state);
 await repl.RunAsync(cts).ConfigureAwait(false);
 
-cts.Cancel();
+await cts.CancelAsync();
 await Task.WhenAll(SwallowCancellation(inboundTask), SwallowCancellation(outboundTask)).ConfigureAwait(false);
 
 return;
@@ -76,5 +83,6 @@ static async Task SwallowCancellation(Task task)
     }
     catch (OperationCanceledException)
     {
+        // ignore
     }
 }

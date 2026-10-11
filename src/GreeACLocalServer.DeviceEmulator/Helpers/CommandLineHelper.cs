@@ -41,6 +41,7 @@ internal static class CommandLineHelper
                             --key <key>               Default crypto key, must match the server's DefaultCryptoKey
                             --device-key <key>        Per-device bind key, 16 chars (default: derived from --mac)
                             --heartbeat-seconds <n>   Heartbeat interval in seconds (default: 60)
+                            --protocol v1|v2          Local UDP 7000 protocol: v1 = AES-ECB, v2 = AES-GCM (default: v1)
                           """);
     }
 

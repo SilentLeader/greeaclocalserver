@@ -1,3 +1,5 @@
+using GreeACLocalServer.Device.Crypto;
+
 namespace GreeACLocalServer.DeviceEmulator.Extensions;
 
 internal static class CommandLineArgsExtensions
@@ -36,6 +38,16 @@ internal static class CommandLineArgsExtensions
                 default:
                     value = false;
                     return false;
+            }
+        }
+
+        public bool TryParseProtocol(out GreeProtocolGeneration generation)
+        {
+            switch (arg.ToLowerInvariant())
+            {
+                case "v1": generation = GreeProtocolGeneration.V1Ecb; return true;
+                case "v2": generation = GreeProtocolGeneration.V2Gcm; return true;
+                default: generation = GreeProtocolGeneration.V1Ecb; return false;
             }
         }
 
