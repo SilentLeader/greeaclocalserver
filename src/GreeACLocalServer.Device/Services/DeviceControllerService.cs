@@ -1,4 +1,5 @@
 using GreeACLocalServer.Device.Commands;
+using GreeACLocalServer.Device.Crypto;
 using GreeACLocalServer.Device.Interfaces;
 using GreeACLocalServer.Device.Requests;
 using GreeACLocalServer.Device.Responses;
@@ -16,12 +17,12 @@ namespace GreeACLocalServer.Device.Services;
 
 internal class DeviceControllerService(
         ILogger<DeviceControllerService> logger,
-        ICryptoService cryptoService) : IDeviceControllerService
+        IEnumerable<IGreeCipher> ciphers) : IDeviceControllerService
 {
     private const int CommandPort = 7000;
     private const int CommandTimeoutMs = 3000;
     private readonly ILogger<DeviceControllerService> _logger = logger;
-    private readonly ICryptoService _cryptoService = cryptoService;
+    private readonly Dictionary<GreeProtocolGeneration, IGreeCipher> _ciphers = ciphers.ToDictionary(c => c.Generation);
 
     /// <summary>
     /// Per-IP cache of the <c>scan → bind</c> result (MAC + device crypto key) so
@@ -33,7 +34,14 @@ internal class DeviceControllerService(
 
     private static readonly TimeSpan BindCacheTtl = TimeSpan.FromMinutes(30);
 
-    private sealed record CachedBind(string MacAddress, string CryptoKey, DateTime CachedUtc);
+    private sealed record CachedBind(string MacAddress, string CryptoKey, GreeProtocolGeneration Generation, DateTime CachedUtc);
+
+    /// <summary>
+    /// Per-IP protocol generation the last successful bind used. Unlike
+    /// <see cref="_bindCache"/> it never expires, so a known GCM device is not
+    /// probed with the ECB bind (and its timeout) again after the key expires.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, GreeProtocolGeneration> _knownGeneration = new();
 
     private readonly record struct BindResolution(ScanResult Scan, bool FromCache);
 
@@ -257,14 +265,15 @@ internal class DeviceControllerService(
         {
             _logger.LogDebug("Using cached bind key for IP {IpAddress} MAC {MacAddress}", ipAddress, cached.MacAddress);
             return new BindResolution(
-                new ScanResult(true, "Using cached bind key", null, cached.MacAddress, cached.CryptoKey),
+                new ScanResult(true, "Using cached bind key", null, cached.MacAddress, cached.CryptoKey, cached.Generation),
                 FromCache: true);
         }
 
         var scan = await ScanDeviceAsync(ipAddress, cancellationToken);
         if (scan.IsSuccess && !string.IsNullOrWhiteSpace(scan.MacAddress) && !string.IsNullOrWhiteSpace(scan.CryptoKey))
         {
-            _bindCache[ipAddress] = new CachedBind(scan.MacAddress!, scan.CryptoKey!, DateTime.UtcNow);
+            _bindCache[ipAddress] = new CachedBind(scan.MacAddress!, scan.CryptoKey!, scan.Generation, DateTime.UtcNow);
+            _knownGeneration[ipAddress] = scan.Generation;
         }
 
         return new BindResolution(scan, FromCache: false);
@@ -288,7 +297,7 @@ internal class DeviceControllerService(
         }
 
         var result = await SendPackCommandAsync<TResponse, TCommand>(
-            ipAddress, bind.Scan.MacAddress!, bind.Scan.CryptoKey, command, 0, cancellationToken);
+            ipAddress, bind.Scan.MacAddress!, _ciphers[bind.Scan.Generation], bind.Scan.CryptoKey, command, 0, cancellationToken);
 
         if (result.IsSuccess || !bind.FromCache)
         {
@@ -305,7 +314,7 @@ internal class DeviceControllerService(
         }
 
         result = await SendPackCommandAsync<TResponse, TCommand>(
-            ipAddress, fresh.Scan.MacAddress!, fresh.Scan.CryptoKey, command, 0, cancellationToken);
+            ipAddress, fresh.Scan.MacAddress!, _ciphers[fresh.Scan.Generation], fresh.Scan.CryptoKey, command, 0, cancellationToken);
         return (fresh.Scan, result);
     }
 
@@ -344,7 +353,17 @@ internal class DeviceControllerService(
             }
 
 
-            var decryptedPack = _cryptoService.Decrypt(response.Data, "");
+            // The scan reply is encrypted with a generic key: GCM when the envelope
+            // carries a tag, ECB otherwise. Many GCM units still answer the scan in
+            // ECB, so this alone does not tell which generation the bind needs.
+            var scanGeneration = string.IsNullOrEmpty(response.Tag) ? GreeProtocolGeneration.V1Ecb : GreeProtocolGeneration.V2Gcm;
+            if (!_ciphers.TryGetValue(scanGeneration, out var scanCipher)
+                || !scanCipher.TryDecrypt(response.Data, response.Tag, null, out var decryptedPack))
+            {
+                _logger.LogDebug("Could not decrypt the scan response from IP {IpAddress}", ipAddress);
+                return new ScanResult(false, "Could not decrypt the scan response", "SCAN_DECRYPT_FAILED");
+            }
+
             var packResponse = JsonSerializer.Deserialize<ScanResponse>(decryptedPack);
 
             if (packResponse == null || string.IsNullOrWhiteSpace(packResponse.Mac))
@@ -355,23 +374,50 @@ internal class DeviceControllerService(
 
             _logger.LogDebug("Device MAC discovered: {MacAddress}", packResponse.Mac);
 
-            var bindCommand = new BindCommand { UId = 0, Mac = packResponse.Mac };
-            var bindResponse = await SendPackCommandAsync<BindResponse, BindCommand>(ipAddress, packResponse.Mac, null, bindCommand, 1, cancellationToken);
+            var candidates = GetBindCandidates(ipAddress, scanGeneration);
+            var keyMissing = false;
 
-            if (bindResponse?.ResponseData == null || bindResponse.ResponseData.ResponseType != "bindok")
+            for (var i = 0; i < candidates.Count; i++)
             {
-                _logger.LogDebug("Bind failed for MAC {MacAddress}", packResponse.Mac);
-                return new ScanResult(false, "Device did not respond to bind request", "BIND_NO_RESPONSE");
+                var cipher = candidates[i];
+                var isLastCandidate = i == candidates.Count - 1;
+
+                // The GCM payloads mirror, field for field, what is confirmed to work on
+                // a real GCM unit; the ECB ones stay as they always were.
+                var bindCommand = new BindCommand
+                {
+                    UId = 0,
+                    Mac = packResponse.Mac,
+                    Cid = cipher.Generation == GreeProtocolGeneration.V2Gcm ? packResponse.Mac : null,
+                };
+
+                // A device silently drops a bind encrypted for the other generation, so
+                // "no response" is expected while probing and only worth a warning once
+                // every generation has been tried.
+                var bindResponse = await SendPackCommandAsync<BindResponse, BindCommand>(
+                    ipAddress, packResponse.Mac, cipher, null, bindCommand, 1, cancellationToken,
+                    isLastCandidate ? LogLevel.Warning : LogLevel.Debug);
+
+                if (bindResponse.ResponseData == null || bindResponse.ResponseData.ResponseType != "bindok")
+                {
+                    _logger.LogDebug("Bind failed for MAC {MacAddress} using {Generation}", packResponse.Mac, cipher.Generation);
+                    continue;
+                }
+
+                if (string.IsNullOrEmpty(bindResponse.ResponseData.CryptoKey))
+                {
+                    _logger.LogWarning("Crypto key not found in bind response for MAC {MacAddress}", packResponse.Mac);
+                    keyMissing = true;
+                    continue;
+                }
+
+                _logger.LogDebug("Device scan completed successfully: MAC={MacAddress} Generation={Generation}", packResponse.Mac, cipher.Generation);
+                return new ScanResult(true, "Device scan successful", null, macAddress: packResponse.Mac, cryptoKey: bindResponse.ResponseData.CryptoKey, generation: cipher.Generation);
             }
 
-            if (string.IsNullOrEmpty(bindResponse.ResponseData.CryptoKey))
-            {
-                _logger.LogWarning("Crypto key not found in bind response for MAC {MacAddress}", packResponse.Mac);
-                return new ScanResult(false, "Crypto key not found in bind response", "KEY_NOT_FOUND");
-            }
-
-            _logger.LogDebug("Device scan completed successfully: MAC={MacAddress}", packResponse.Mac);
-            return new ScanResult(true, "Device scan successful", null, macAddress: packResponse.Mac, cryptoKey: bindResponse.ResponseData.CryptoKey);
+            return keyMissing
+                ? new ScanResult(false, "Crypto key not found in bind response", "KEY_NOT_FOUND")
+                : new ScanResult(false, "Device did not respond to bind request", "BIND_NO_RESPONSE");
         }
         catch (Exception ex)
         {
@@ -380,14 +426,51 @@ internal class DeviceControllerService(
         }
     }
 
-    private async Task<PackCommandResult<TResponse>> SendPackCommandAsync<TResponse, TCommand>(string ipAddress, string macAddress, string? cryptoKey, TCommand command, int? id, CancellationToken cancellationToken)
+    /// <summary>
+    /// Generations to try the bind with, most likely first: the one the scan reply
+    /// proved (GCM tag), else the one this IP last bound with, else ECB then GCM.
+    /// </summary>
+    private List<IGreeCipher> GetBindCandidates(string ipAddress, GreeProtocolGeneration scanGeneration)
+    {
+        var preferred = scanGeneration == GreeProtocolGeneration.V2Gcm
+            ? GreeProtocolGeneration.V2Gcm
+            : _knownGeneration.GetValueOrDefault(ipAddress, GreeProtocolGeneration.V1Ecb);
+
+        GreeProtocolGeneration[] order = preferred == GreeProtocolGeneration.V2Gcm
+            ? [GreeProtocolGeneration.V2Gcm, GreeProtocolGeneration.V1Ecb]
+            : [GreeProtocolGeneration.V1Ecb, GreeProtocolGeneration.V2Gcm];
+
+        var candidates = new List<IGreeCipher>(order.Length);
+        foreach (var generation in order)
+        {
+            if (generation == GreeProtocolGeneration.V2Gcm && !AesGcmGreeCipher.IsSupported)
+            {
+                _logger.LogDebug("AES-GCM is not supported on this platform; skipping the GCM bind");
+                continue;
+            }
+
+            if (_ciphers.TryGetValue(generation, out var cipher))
+            {
+                candidates.Add(cipher);
+            }
+        }
+
+        return candidates;
+    }
+
+    private async Task<PackCommandResult<TResponse>> SendPackCommandAsync<TResponse, TCommand>(string ipAddress, string macAddress, IGreeCipher cipher, string? cryptoKey, TCommand command, int? id, CancellationToken cancellationToken, LogLevel noResponseLogLevel = LogLevel.Warning)
     where TCommand : class
     {
         try
         {
+            if (command is QueryStatusCommand statusCommand)
+            {
+                statusCommand.Mac = cipher.Generation == GreeProtocolGeneration.V2Gcm ? macAddress : 0;
+            }
+
             var packData = JsonSerializer.Serialize(command);
-            var encryptedCommand = _cryptoService.Encrypt(packData, cryptoKey);
-            var packCommand = new PackCommand(encryptedCommand, macAddress, id);
+            var encryptedCommand = cipher.Encrypt(packData, cryptoKey);
+            var packCommand = new PackCommand(encryptedCommand.Pack, macAddress, id, encryptedCommand.Tag);
 
             _logger.LogDebug("Sending pack command to IP {IpAddress} MAC {MacAddress} Data: {packData}", ipAddress, macAddress, packData);
 
@@ -395,11 +478,16 @@ internal class DeviceControllerService(
 
             if (response == null || string.IsNullOrEmpty(response.Data))
             {
-                _logger.LogWarning("No response from device at IP {IpAddress} MAC {MacAddress}", ipAddress, macAddress);
+                _logger.Log(noResponseLogLevel, "No response from device at IP {IpAddress} MAC {MacAddress}", ipAddress, macAddress);
                 return new PackCommandResult<TResponse>(false, "No response from device", "NO_RESPONSE", default!);
             }
 
-            var decryptedResponse = _cryptoService.Decrypt(response.Data, cryptoKey);
+            if (!cipher.TryDecrypt(response.Data, response.Tag, cryptoKey, out var decryptedResponse))
+            {
+                _logger.LogWarning("Could not decrypt the response from device at IP {IpAddress} MAC {MacAddress}", ipAddress, macAddress);
+                return new PackCommandResult<TResponse>(false, "Could not decrypt the device response", "PACK_DECRYPT_FAILED", default!);
+            }
+
             var responseData = JsonSerializer.Deserialize<TResponse>(decryptedResponse);
             _logger.LogDebug("Response data: {decryptedResponse}", decryptedResponse);
 
