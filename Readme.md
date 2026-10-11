@@ -75,7 +75,7 @@ docker run -d \
   --name gree-ac-server \
   -e GreeServer__ServerOptions__DomainName=gree.example.com \
   -e GreeServer__ServerOptions__ExternalIp=192.168.1.100 \
-  -e GreeServer__EnableUI=true \
+  -e Server__EnableUI=true \
   -p 5000:5000 \
   -p 1813:1813 \
   -p 5100:5100 \
@@ -93,7 +93,7 @@ docker run -d \
   --name gree-ac-server-tls \
   -e GreeServer__ServerOptions__DomainName=gree.example.com \
   -e GreeServer__ServerOptions__ExternalIp=192.168.1.100 \
-  -e GreeServer__EnableUI=true \
+  -e Server__EnableUI=true \
   -e GreeServer__ServerOptions__TLSEnabled=true \
   -e GreeServer__EncryptionOptions__TLSCertificatePath=/app/certs/server.pfx \
   -e GreeServer__EncryptionOptions__TLSCertificatePassword=your-cert-password \
@@ -126,14 +126,14 @@ docker-compose up -d
 ```
 
 #### **Headless Mode (No Web UI)**
-For deployments without a web interface, set `GreeServer__EnableUI=false`:
+For deployments without a web interface, set `Server__EnableUI=false`:
 ```bash
 docker run -d \
   --restart=always \
   --name gree-ac-server \
   -e GreeServer__ServerOptions__DomainName=gree.example.com \
   -e GreeServer__ServerOptions__ExternalIp=192.168.1.100 \
-  -e GreeServer__EnableUI=false \
+  -e Server__EnableUI=false \
   -p 5000:5000 \
   -p 1813:1813 \
   gree-ac-local-server:latest
@@ -814,7 +814,7 @@ The following environment variables can be used to configure the container:
 | `ASPNETCORE_URLS` | `http://+:5100;https://+:5443` | Kestrel URLs for web UI (HTTP and TLS) |
 | `GreeServer__ServerOptions__DomainName` | `gree.local.server` | Domain name for DNS configuration |
 | `GreeServer__ServerOptions__ExternalIp` | `127.0.0.1` | Server IP address |
-| `GreeServer__EnableUI` | `true` | Enable/disable web interface |
+| `Server__EnableUI` | `true` | Enable/disable web interface |
 | `GreeServer__ServerOptions__TLSEnabled` | `false` | Start the device TLS listener on port 1813 |
 | `GreeServer__ServerOptions__AllowLegacyTlsProtocols` | `true` | Accept SSL3/TLS1.0/1.1 on the 1813 listener; `false` = TLS1.2+ only |
 | `GreeServer__ServerOptions__IdleTimeoutSeconds` | `180` | Drop a device connection after N seconds of silence |
