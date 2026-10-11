@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
+using GreeACLocalServer.Device.Crypto;
 using GreeACLocalServer.Device.Interfaces;
 using GreeACLocalServer.Device.Responses;
 using GreeACLocalServer.DeviceEmulator.Models;
@@ -15,12 +16,27 @@ namespace GreeACLocalServer.DeviceEmulator.Services;
 /// handshake, so the "Device Config" page and runtime-state/firmware polling work
 /// against the emulator exactly as they would against a real unit.
 /// </summary>
-public sealed class OutboundResponder(EmulatedDeviceState state, ICryptoService crypto, int port = 7000)
+/// <remarks>
+/// In <see cref="GreeProtocolGeneration.V2Gcm"/> mode it behaves like a newer Wi-Fi
+/// module: the scan is still answered in ECB, but bind and pack commands must be
+/// AES-GCM - anything else is silently dropped, as a real unit does.
+/// </remarks>
+public sealed class OutboundResponder(
+    EmulatedDeviceState state,
+    ICryptoService crypto,
+    GreeProtocolGeneration generation = GreeProtocolGeneration.V1Ecb,
+    int port = 7000)
 {
+    private readonly IGreeCipher _scanCipher = new AesEcbGreeCipher(crypto);
+
+    private readonly IGreeCipher _cipher = generation == GreeProtocolGeneration.V2Gcm
+        ? new AesGcmGreeCipher()
+        : new AesEcbGreeCipher(crypto);
+
     public async Task RunAsync(CancellationToken ct)
     {
         using var udp = new UdpClient(new IPEndPoint(IPAddress.Any, port));
-        ConsoleLog.Info($"Outbound UDP responder listening on 0.0.0.0:{port}");
+        ConsoleLog.Info($"Outbound UDP responder listening on 0.0.0.0:{port} ({generation})");
 
         while (!ct.IsCancellationRequested)
         {
@@ -41,7 +57,11 @@ public sealed class OutboundResponder(EmulatedDeviceState state, ICryptoService 
 
             try
             {
-                await HandleDatagramAsync(udp, received, ct).ConfigureAwait(false);
+                var reply = BuildReply(Encoding.UTF8.GetString(received.Buffer));
+                if (reply is not null)
+                {
+                    await udp.SendAsync(Encoding.UTF8.GetBytes(reply), received.RemoteEndPoint, ct).ConfigureAwait(false);
+                }
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -50,29 +70,30 @@ public sealed class OutboundResponder(EmulatedDeviceState state, ICryptoService 
         }
     }
 
-    private async Task HandleDatagramAsync(UdpClient udp, UdpReceiveResult received, CancellationToken ct)
+    /// <summary>
+    /// Builds the reply datagram for one request datagram, or <c>null</c> when the
+    /// emulated device stays silent (unknown request, wrong protocol generation).
+    /// </summary>
+    public string? BuildReply(string requestText)
     {
-        var requestText = Encoding.UTF8.GetString(received.Buffer);
         using var doc = JsonDocument.Parse(requestText);
         var type = doc.RootElement.GetProperty("t").GetString();
 
         switch (type)
         {
             case "scan":
-                await HandleScanAsync(udp, received.RemoteEndPoint, ct).ConfigureAwait(false);
-                break;
+                return BuildScanReply();
 
             case "pack":
-                await HandlePackAsync(udp, doc.RootElement, received.RemoteEndPoint, ct).ConfigureAwait(false);
-                break;
+                return BuildPackReply(doc.RootElement);
 
             default:
                 ConsoleLog.Warn($"Outbound responder: ignoring unknown request type '{type}'");
-                break;
+                return null;
         }
     }
 
-    private async Task HandleScanAsync(UdpClient udp, IPEndPoint remote, CancellationToken ct)
+    private string BuildScanReply()
     {
         var scanResponse = new ScanResponse
         {
@@ -85,19 +106,25 @@ public sealed class OutboundResponder(EmulatedDeviceState state, ICryptoService 
             Version = "V1.00",
         };
 
-        await SendPackAsync(udp, remote, JsonSerializer.Serialize(scanResponse), cryptoKey: null, ct).ConfigureAwait(false);
+        return BuildEnvelope(_scanCipher, JsonSerializer.Serialize(scanResponse), cryptoKey: null);
     }
 
-    private async Task HandlePackAsync(UdpClient udp, JsonElement root, IPEndPoint remote, CancellationToken ct)
+    private string? BuildPackReply(JsonElement root)
     {
         var innerCipher = root.GetProperty("pack").GetString() ?? string.Empty;
+        var tag = root.TryGetProperty("tag", out var tagElement) ? tagElement.GetString() : null;
         var isBind = root.TryGetProperty("i", out var idElement) && idElement.GetInt32() == 1;
+
+        // Bind requests are always encrypted with the generation's generic (well-known) key.
+        var requestKey = isBind ? null : state.CryptoKey;
+        if (!_cipher.TryDecrypt(innerCipher, tag, requestKey, out var innerJson))
+        {
+            ConsoleLog.Warn($"Outbound responder: ignoring a pack that is not valid {generation} (bind={isBind})");
+            return null;
+        }
 
         if (isBind)
         {
-            // Bind requests are always encrypted with the default (well-known) key.
-            _ = crypto.Decrypt(innerCipher);
-
             var bindResponse = new BindResponse
             {
                 ResponseType = "bindok",
@@ -105,11 +132,9 @@ public sealed class OutboundResponder(EmulatedDeviceState state, ICryptoService 
                 ResultCode = 200,
                 CryptoKey = state.CryptoKey,
             };
-            await SendPackAsync(udp, remote, JsonSerializer.Serialize(bindResponse), cryptoKey: null, ct).ConfigureAwait(false);
-            return;
+            return BuildEnvelope(_cipher, JsonSerializer.Serialize(bindResponse), cryptoKey: null);
         }
 
-        var innerJson = crypto.Decrypt(innerCipher, state.CryptoKey);
         using var innerDoc = JsonDocument.Parse(innerJson);
         var innerType = innerDoc.RootElement.GetProperty("t").GetString();
 
@@ -123,10 +148,10 @@ public sealed class OutboundResponder(EmulatedDeviceState state, ICryptoService 
         if (responseJson is null)
         {
             ConsoleLog.Warn($"Outbound responder: ignoring unknown pack command type '{innerType}'");
-            return;
+            return null;
         }
 
-        await SendPackAsync(udp, remote, responseJson, state.CryptoKey, ct).ConfigureAwait(false);
+        return BuildEnvelope(_cipher, responseJson, state.CryptoKey);
     }
 
     private string BuildStatusResponse(JsonElement inner)
@@ -161,11 +186,11 @@ public sealed class OutboundResponder(EmulatedDeviceState state, ICryptoService 
         return JsonSerializer.Serialize(new { t = "res", mac = state.Mac, r = 200, opt, p = values });
     }
 
-    private async Task SendPackAsync(UdpClient udp, IPEndPoint remote, string innerJson, string? cryptoKey, CancellationToken ct)
+    private static string BuildEnvelope(IGreeCipher cipher, string innerJson, string? cryptoKey)
     {
-        var encrypted = crypto.Encrypt(innerJson, cryptoKey);
-        var envelope = JsonSerializer.Serialize(new { t = "pack", pack = encrypted });
-        var bytes = Encoding.UTF8.GetBytes(envelope);
-        await udp.SendAsync(bytes, remote, ct).ConfigureAwait(false);
+        var encrypted = cipher.Encrypt(innerJson, cryptoKey);
+        return encrypted.Tag is null
+            ? JsonSerializer.Serialize(new { t = "pack", pack = encrypted.Pack })
+            : JsonSerializer.Serialize(new { t = "pack", pack = encrypted.Pack, tag = encrypted.Tag });
     }
 }

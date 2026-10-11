@@ -443,11 +443,15 @@ cannot reach the server at `127.0.0.1`.
 - **`MaxConsecutiveFailures`** (default `5`): after this many failures in a row the
   device is dropped from the poll entirely until it reconnects (`0` disables this,
   leaving only the backoff). The stop is logged once at information level.
-- Newer GREE firmware that talks to the vendor cloud over TLS often does **not**
-  answer the local UDP port 7000 control protocol at all — for those devices live
-  runtime state, firmware read and Device Config are unavailable (device tracking
-  and heartbeats still work), and the poller backs off and then stops on its own
-  instead of retrying every cycle.
+- The local UDP port 7000 control protocol exists in two generations: older Wi-Fi
+  modules encrypt it with AES-ECB, newer ones with AES-GCM. The server detects the
+  generation per device on the first query (ECB is tried first, so the very first
+  answer from a GCM unit takes about 10 seconds longer) and remembers it; nothing
+  needs to be configured.
+- Some units do **not** answer the local UDP port 7000 control protocol at all — for
+  those devices live runtime state, firmware read and Device Config are unavailable
+  (device tracking and heartbeats still work), and the poller backs off and then
+  stops on its own instead of retrying every cycle.
 
 ### **Additional Configuration**
 ```json

@@ -1,3 +1,4 @@
+using GreeACLocalServer.Device.Crypto;
 using GreeACLocalServer.Device.Interfaces;
 using GreeACLocalServer.Device.Models;
 using GreeACLocalServer.Device.Services;
@@ -28,6 +29,8 @@ public static class DIExtensions
 
         // Set services
         services.AddSingleton<ICryptoService, CryptoService>();
+        services.AddSingleton<IGreeCipher, AesEcbGreeCipher>();
+        services.AddSingleton<IGreeCipher, AesGcmGreeCipher>();
         services.AddSingleton<IMessageHandlerService, MessageHandlerService>();
         services.AddSingleton<IDeviceControllerService, DeviceControllerService>();
         services.AddSingleton<ISocketHandlerService, SocketHandlerService>();
