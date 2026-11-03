@@ -414,7 +414,9 @@ cannot reach the server at `127.0.0.1`.
 
 > `DomainName`, `ExternalIp` and `GreeServer.EncryptionOptions.DefaultCryptoKey` are validated
 > at startup — if any is missing the server refuses to start with a clear error instead of
-> failing on every device packet.
+> failing on every device packet. `DefaultCryptoKey` must also be exactly 16, 24 or 32 bytes;
+> watch out for quotes or a cut-off value when setting it as an environment variable
+> (in a compose `environment:` list, `- KEY="value"` keeps the quotes as part of the value).
 
 #### **`Server.EnableUI`**
 - **Purpose**: Controls whether the web interface is available

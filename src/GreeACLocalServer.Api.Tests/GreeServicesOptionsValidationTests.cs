@@ -62,6 +62,41 @@ public class GreeServicesOptionsValidationTests
         Assert.Contains("DefaultCryptoKey", ex.Message);
     }
 
+    [Theory]
+    [InlineData("\"a3K8Bx%2r8Y7#xDh\"")] // quotes kept by compose list syntax
+    [InlineData("a3K8Bx%2r8Y7")]         // value cut at '#'
+    [InlineData("short")]
+    public void WrongLengthDefaultCryptoKey_FailsValidation(string key)
+    {
+        var provider = BuildProvider(new Dictionary<string, string?>
+        {
+            ["GreeServer:ServerOptions:DomainName"] = "gree.example.com",
+            ["GreeServer:ServerOptions:ExternalIp"] = "127.0.0.1",
+            ["GreeServer:EncryptionOptions:DefaultCryptoKey"] = key,
+        });
+
+        var ex = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<EncryptionOptions>>().Value);
+        Assert.Contains("16, 24 or 32 bytes", ex.Message);
+    }
+
+    [Theory]
+    [InlineData("a3K8Bx%2r8Y7#xDh")]
+    [InlineData("0123456789abcdef01234567")]
+    [InlineData("0123456789abcdef0123456789abcdef")]
+    public void ValidLengthDefaultCryptoKey_PassesValidation(string key)
+    {
+        var provider = BuildProvider(new Dictionary<string, string?>
+        {
+            ["GreeServer:ServerOptions:DomainName"] = "gree.example.com",
+            ["GreeServer:ServerOptions:ExternalIp"] = "127.0.0.1",
+            ["GreeServer:EncryptionOptions:DefaultCryptoKey"] = key,
+        });
+
+        var options = provider.GetRequiredService<IOptions<EncryptionOptions>>().Value;
+        Assert.Equal(key, options.DefaultCryptoKey);
+    }
+
     [Fact]
     public void CompleteConfiguration_PassesValidation()
     {
