@@ -296,6 +296,18 @@ public sealed class DeviceControllerServiceTests
         Assert.Equal("VALUE_NOT_APPLIED", result.ErrorCode);
     }
 
+    [Theory]
+    [InlineData("""{"r":200,"t":"bindok","mac":"aabbccddeeff","key":"0123456789abcdef"}""",
+                """{"r":200,"t":"bindok","mac":"aabbccddeeff","key":"***"}""")]
+    [InlineData("""{"t":"bindok", "key" : "0123456789abcdef"}""",
+                """{"t":"bindok", "key" : "***"}""")]
+    [InlineData("""{"t":"dat","cols":["Pow"],"dat":[1]}""",
+                """{"t":"dat","cols":["Pow"],"dat":[1]}""")]
+    public void MaskSecrets_HidesBindKeyOnly(string json, string expected)
+    {
+        Assert.Equal(expected, DeviceControllerService.MaskSecrets(json));
+    }
+
     [Fact]
     public async Task GetDeviceStatus_DeviceSilent_ReturnsNoResponseAfterTimeout()
     {
