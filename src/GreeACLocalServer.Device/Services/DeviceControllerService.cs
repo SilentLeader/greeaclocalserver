@@ -11,11 +11,12 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Serilog.Context;
 
 namespace GreeACLocalServer.Device.Services;
 
-internal class DeviceControllerService(
+internal partial class DeviceControllerService(
         ILogger<DeviceControllerService> logger,
         IEnumerable<IGreeCipher> ciphers) : IDeviceControllerService
 {
@@ -515,7 +516,7 @@ internal class DeviceControllerService(
             }
 
             var responseData = JsonSerializer.Deserialize<TResponse>(decryptedResponse);
-            _logger.LogDebug("Response data: {decryptedResponse}", decryptedResponse);
+            _logger.LogDebug("Response data: {decryptedResponse}", MaskSecrets(decryptedResponse));
 
             return new PackCommandResult<TResponse>(true, "Pack command executed successfully", null, responseData);
         }
@@ -553,10 +554,22 @@ internal class DeviceControllerService(
                 // Caller-initiated cancellation is not retryable.
                 throw;
             }
+            // A timeout is the expected outcome when a device does not speak the protocol
+            // generation being tried (e.g. an ECB bind sent to a GCM-only unit), so it is
+            // logged without the stack trace; other failures keep the exception.
+            catch (OperationCanceledException) when (attempt < 2)
+            {
+                _logger.LogDebug("UDP command attempt {Attempt} for IP {IpAddress} got no reply within {TimeoutMs} ms, retrying...", attempt + 1, ipAddress, CommandTimeoutMs);
+                await Task.Delay(500, cancellationToken);
+            }
             catch (Exception ex) when (attempt < 2)
             {
                 _logger.LogDebug(ex, "UDP command attempt {Attempt} failed for IP {IpAddress}, retrying...", attempt + 1, ipAddress);
                 await Task.Delay(500, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogDebug("UDP command for IP {IpAddress} got no reply after {Attempts} attempts", ipAddress, attempt + 1);
             }
             catch (Exception ex)
             {
@@ -566,4 +579,11 @@ internal class DeviceControllerService(
 
         return null;
     }
+
+    // The bind reply carries the device's session key. Debug logs get attached to
+    // public issue reports, so the key value is masked before logging.
+    internal static string MaskSecrets(string json) => SecretValuePattern().Replace(json, "$1\"***\"");
+
+    [GeneratedRegex("(\"key\"\\s*:\\s*)\"[^\"]*\"", RegexOptions.CultureInvariant)]
+    private static partial Regex SecretValuePattern();
 }
