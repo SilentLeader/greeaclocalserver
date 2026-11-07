@@ -12,4 +12,10 @@ public class PackResponse : BaseResponseWithId
 
     [JsonPropertyName("pack")]
     public string Data { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Base64 AES-GCM authentication tag; only present on the V2 (GCM) generation.
+    /// </summary>
+    [JsonPropertyName("tag")]
+    public string? Tag { get; set; }
 }
