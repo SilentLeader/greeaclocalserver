@@ -86,7 +86,8 @@ public sealed class DeviceControllerServiceTests
             int statusTemSen = 65,
             int statusFailures = 0,
             GreeProtocolGeneration generation = GreeProtocolGeneration.V1Ecb,
-            bool gcmScanReply = false)
+            bool gcmScanReply = false,
+            bool applyCommands = true)
         {
             var isGcm = generation == GreeProtocolGeneration.V2Gcm;
             var gcm = new AesGcmGreeCipher();
@@ -157,6 +158,15 @@ public sealed class DeviceControllerServiceTests
                         }
 
                         using var innerDoc = JsonDocument.Parse(innerJson);
+                        if (innerDoc.RootElement.GetProperty("t").GetString() == "cmd")
+                        {
+                            // A device that ignores the write still answers r:200, but echoes empty values.
+                            var opt = innerDoc.RootElement.GetProperty("opt").EnumerateArray().Select(o => o.GetString()).ToArray();
+                            var p = innerDoc.RootElement.GetProperty("p").EnumerateArray()
+                                .Select(v => applyCommands ? v.GetString() : string.Empty).ToArray();
+                            return JsonSerializer.Serialize(new { t = "res", mac = Mac, r = 200, opt, p });
+                        }
+
                         var cols = innerDoc.RootElement.GetProperty("cols").EnumerateArray().Select(c => c.GetString()).ToArray();
                         var dat = cols.Select(object (c) => c switch
                         {
@@ -238,6 +248,52 @@ public sealed class DeviceControllerServiceTests
             new GetDeviceStatusRequest("127.0.0.1"), CancellationToken.None);
 
         Assert.False(result.IsSuccess);
+    }
+
+    [Fact]
+    public async Task SetDeviceName_DeviceEchoesName_Succeeds()
+    {
+        using var stub = new UdpDeviceStub("h", "n");
+
+        var result = await CreateService().SetDeviceNameAsync(
+            new SetDeviceNameRequest("127.0.0.1", "Living room"), CancellationToken.None);
+
+        Assert.True(result.IsSuccess, result.Message);
+    }
+
+    [Fact]
+    public async Task SetDeviceName_DeviceAcknowledgesButIgnores_Fails()
+    {
+        using var stub = new UdpDeviceStub("h", "n", applyCommands: false);
+
+        var result = await CreateService().SetDeviceNameAsync(
+            new SetDeviceNameRequest("127.0.0.1", "Living room"), CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("VALUE_NOT_APPLIED", result.ErrorCode);
+    }
+
+    [Fact]
+    public async Task SetRemoteHost_DeviceEchoesHost_Succeeds()
+    {
+        using var stub = new UdpDeviceStub("h", "n");
+
+        var result = await CreateService().SetRemoteHostAsync(
+            new SetRemoteHostRequest("127.0.0.1", "gree.example.com"), CancellationToken.None);
+
+        Assert.True(result.IsSuccess, result.Message);
+    }
+
+    [Fact]
+    public async Task SetRemoteHost_DeviceAcknowledgesButIgnores_Fails()
+    {
+        using var stub = new UdpDeviceStub("h", "n", applyCommands: false);
+
+        var result = await CreateService().SetRemoteHostAsync(
+            new SetRemoteHostRequest("127.0.0.1", "gree.example.com"), CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("VALUE_NOT_APPLIED", result.ErrorCode);
     }
 
     [Fact]

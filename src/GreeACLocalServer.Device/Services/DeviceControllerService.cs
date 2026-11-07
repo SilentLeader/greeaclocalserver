@@ -203,6 +203,12 @@ internal class DeviceControllerService(
 
                 if (result.IsSuccess && result.ResponseData?.ResultCode == (int)HttpStatusCode.OK)
                 {
+                    if (!EchoesValue(result.ResponseData, operation.DeviceName))
+                    {
+                        _logger.LogWarning("Device acknowledged the name change but did not apply it");
+                        return new SimpleDeviceOperationResult(false, ValueNotAppliedMessage("name"), ValueNotAppliedErrorCode);
+                    }
+
                     _logger.LogInformation("Device name set successfully");
                     return new SimpleDeviceOperationResult(true, string.Empty);
                 }
@@ -216,6 +222,20 @@ internal class DeviceControllerService(
             }
         }
     }
+
+    private const string ValueNotAppliedErrorCode = "VALUE_NOT_APPLIED";
+
+    private static string ValueNotAppliedMessage(string setting)
+        => $"The device acknowledged the command but did not apply the new {setting}. "
+           + "Its firmware may not allow changing it locally.";
+
+    // A device echoes the written value in the "p" array of its "res" reply. Some
+    // newer firmware answers r:200 but echoes an empty value instead, which means
+    // the write was ignored. A reply without any echoed value is trusted as before.
+    private static bool EchoesValue(ParameterResponse response, string expected)
+        => response.ParameterValues.Count == 0
+           || (response.ParameterValues[0] is JsonElement { ValueKind: JsonValueKind.String } echoed
+               && echoed.GetString() == expected);
 
     public async Task<SimpleDeviceOperationResult> SetRemoteHostAsync(SetRemoteHostRequest operation, CancellationToken cancellationToken = default)
     {
@@ -237,6 +257,12 @@ internal class DeviceControllerService(
 
                 if (result.IsSuccess && result.ResponseData?.ResultCode == (int)HttpStatusCode.OK)
                 {
+                    if (!EchoesValue(result.ResponseData, operation.RemoteHost))
+                    {
+                        _logger.LogWarning("Device acknowledged the remote host change but did not apply it");
+                        return new SimpleDeviceOperationResult(false, ValueNotAppliedMessage("remote host"), ValueNotAppliedErrorCode);
+                    }
+
                     _logger.LogInformation("Remote host set successfully");
                     return new SimpleDeviceOperationResult(true, string.Empty);
                 }
